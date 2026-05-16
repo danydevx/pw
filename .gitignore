@@ -1,0 +1,62 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.*
+
+# Composer
+/vendor/
+
+# Node
+/node_modules/
+
+# Build
+/dist/
+/build/
+
+# ProcessWire cache/files
+/site/assets/cache/
+/site/assets/logs/
+/site/assets/sessions/
+/site/assets/backups/
+/site/assets/tmp/
+/site/assets/exports/
+/site/assets/ProCache-*/
+
+/site/assets/files/
+/site/assets/pwpc-*/
+
+# User uploads (opcional)
+#/site/assets/files/
+
+# Compiled assets
+/public/build/
+/public/hot
+
+# Runtime
+/site/config-dev.php
+
+# Database dumps
+*.sql
+*.gz
+*.zip
+
+# Laravel/Vite si aplica
+/public/storage
+/storage/*.key
+
+# Astro/Vite
+.astro/
+
+# Misc
+*.swp
+*.swo
