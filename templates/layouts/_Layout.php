@@ -35,6 +35,24 @@ $view  ='';
 
 
 
+
+    <?php foreach($this->config->styles as $style): ?>
+      <link rel="stylesheet" href="<?= htmlspecialchars((string) $style, ENT_QUOTES, 'UTF-8'); ?>" />
+    <?php endforeach; ?>
+
+      <!-- Stylesheet -->
+    <?php if($config->production): ?>
+      <?php $aiomClass = '\\ProcessWire\\AllInOneMinify'; ?>
+      <?php $themeBase = $config->urls->assets . 'themes/' . $config->theme . '/'; ?>
+      <link rel="stylesheet" href="<?= $aiomClass::CSS([
+        $themeBase . 'vendor/bootstrap/css/bootstrap.min.css',
+      ]); ?>" />
+    <?php else: ?>
+      <link rel="stylesheet" href="<?=$urls->get('tplAssets'); ?>vendor/bootstrap/css/bootstrap.min.css" />
+
+    <?php endif; ?>
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+ 
     <?php if(!$config->production): ?>
       <!-- Tus estilos en Less (opcional). Escribe en styles/app.less -->
       <link
@@ -46,24 +64,6 @@ $view  ='';
       <script>less.watch();</script>
     <?php endif; ?>
 
-
-    <?php foreach($this->config->styles as $style): ?>
-      <link rel="stylesheet" href="<?= htmlspecialchars((string) $style, ENT_QUOTES, 'UTF-8'); ?>" />
-    <?php endforeach; ?>
-
-      <!-- Stylesheet -->
-    <?php if($config->production): ?>
-      <?php $aiomClass = '\\ProcessWire\\AllInOneMinify'; ?>
-      <?php $themeBase = $config->urls->assets . 'themes/' . $config->theme . '/'; ?>
-      <link rel="stylesheet" href="<?= $aiomClass::CSS([
-        $themeBase . 'css/vendor/bootstrap/bootstrap.min.css',
-      ]); ?>" />
-    <?php else: ?>
-      <link rel="stylesheet" href="<?=$urls->get('tplAssets'); ?>vendor/bootstrap/css/bootstrap.min.css" />
-    
-    <?php endif; ?>
-      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
- 
   </head>
   <body>
     <!--layout-->
@@ -78,7 +78,7 @@ $view  ='';
     <!-- Bootstrap 5 JS (con Popper) al final del body -->
  
 
-      <script src="<?=$urls->get('tplAssets'); ?>js/vendor/jquery-4.0.0.min.js" defer></script>
+      <script src="<?=$urls->get('tplAssets'); ?>vendor/jquery-4.0.0.min.js" defer></script>
 
     <?php $modules->get('JqueryValidate')->includeAssets(); ?>
     <?php foreach($this->config->scripts as $script): ?>
@@ -91,18 +91,8 @@ $view  ='';
 
 
  
-
-    <?php
-    if(($config->httpHost ?? '') !== 'pw.local') {
-      $tawk = wire('modules')->get('TawkToChat');
-      if($tawk) echo $tawk->render();
-      $widget = wire('modules')->get('WhatsappWidget');
-      if($widget) echo $widget->renderPlugin();
-    }
-    ?>
-    <?php 
-
-?>
+ 
+  
      <!--End layout-->
   </body>
 </html>
