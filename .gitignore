@@ -2,7 +2,8 @@
 .DS_Store
 Thumbs.db
 config.php
-
+pw.sublime-project
+pwsublime-project.sublime-workspace
 # IDE
 .vscode/
 .idea/
@@ -25,6 +26,7 @@ config.php
 /build/
 
 # ProcessWire cache/files
+/site/assets/
 /site/assets/cache/
 /site/assets/logs/
 /site/assets/sessions/
