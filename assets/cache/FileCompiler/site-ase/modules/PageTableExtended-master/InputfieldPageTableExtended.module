@@ -1,0 +1,180 @@
+<?php
+
+class InputfieldPageTableExtended extends InputfieldPageTable {
+
+	public static function getModuleInfo() {
+		return array(
+			'title' => __('Inputfield for PageTableExtended', __FILE__), // Module Title
+			'summary' => __('Adds Inputfield for PageTableExtended', __FILE__), // Module Summary
+			'version' => 233,
+			'requires' => array('FieldtypePageTableExtended'),
+			'permanent' => false,
+		);
+	}
+
+	public function init() {
+		parent::init();
+		$this->set('pathToCSS', '');
+		$this->set('resetCSS', '');
+		$this->set('renderLayout', '');
+		$this->set('pathToTemplates', '');
+		$this->set('collapseUnpublished', '');
+	}
+
+	public function ___render() {
+
+		$this->config->scripts->add($this->config->urls->InputfieldPageTable . "InputfieldPageTable.js");
+		$this->config->styles->add($this->config->urls->InputfieldPageTable . "InputfieldPageTable.css");
+
+		if($this->resetCSS){
+			$this->config->styles->add($this->config->urls->InputfieldPageTableExtended . "resetAdminCSS.css");
+		}
+
+		if($this->pathToCSS){
+			$this->config->styles->add(wire('config')->urls->templates.$this->pathToCSS);
+		}
+
+		return parent::___render();
+	}
+
+	public function ___renderTable(array $columns) {
+		// exit($this->pathToTemplates);
+		if($this->renderLayout) {
+			$pagesToRender = $this->attr('value'); // pages
+			$layout = "";
+			//get the right language label
+			$lang = wire('user')->language;
+			$label = 'label';
+			if (wire('user')->language->title != 'default'){
+				$label = "label{$lang}";
+			}
+			// $this->wire("config")->paths->templates .= "views/bocks/";
+			// echo $this->wire("config")->paths->templates;
+			foreach($pagesToRender as $p){
+				$layoutTitle = $p->template->$label ? $p->template->$label : $p->template->name;
+				$ext = "." . $this->config->templateExtension;
+				$template_name = $p->template->altFilename ? basename($p->template->altFilename, $ext) : $p->template->name;
+				$templateFilename = $this->config->paths->templates . $this->pathToTemplates  . $template_name . $ext;
+
+				$parsedTemplate = new TemplateFile($templateFilename);
+				$parsedTemplate->set("page", $p);
+				$parsedTemplate->set("isAdmin", 1);
+				$parsedTemplate->options = array('pageTableExtended' => true);
+				$p->of(true);
+
+				$iconClass = "fa-angle-down";
+				$activeClass = "pte-open";
+				$statusClass = "";
+
+				if($p->is(Page::statusUnpublished)) $statusClass .= " pte-unpublished";
+				if($p->is(Page::statusHidden)) $statusClass .= " pte-hidden";
+				if($p->is(Page::statusLocked)) $statusClass .= " pte-locked";
+
+				if($this->collapseUnpublished && $p->is(Page::statusUnpublished)){
+					$iconClass = "fa-angle-right";
+					$activeClass = "hiddenOnStart";
+				}
+
+				$layout .= '
+	        				<tr data-id="'.$p->id.'" class="'.$statusClass.'">
+	        					<td width="95%">
+	        						<a href="#" class="toggleRenderedLayout">
+	        							<i class="toggle-icon fa '.$iconClass.'"></i>
+	        						</a>
+	        						<span class="renderedLayoutTitle '.$activeClass.'">'.$layoutTitle.'</span>
+	        						<div class="renderedLayout '.$activeClass.$statusClass.'">'.$parsedTemplate->render().'</div>
+	        					</td>
+	        					<td width="5%">
+	        						<a class="InputfieldPageTableEdit" data-url="./?id='.$p->id.'&amp;modal=1" href="#">
+	        							<i class="fa fa-edit"></i>
+	        						</a>&nbsp;
+	        						<a class="InputfieldPageTableDelete" href="#">
+	        							<i class="fa fa-trash-o"></i>
+	        						</a>
+	        					</td>
+	        				</tr>';
+			}
+			$out = '
+	        		<table class="AdminDataTable AdminDataList">
+	        			<thead>
+	        				<tr>
+	        					<th>'.$this->_('Layout Elements').'</th>
+	        					<th>&nbsp;</th>
+	        				</tr>
+	        			</thead>
+	        			<tbody class="ui-sortable">'.$layout.'</tbody>
+	        		</table>';
+
+		} else {
+			$out = parent::___renderTable($columns); // InputfieldPageTable method
+		}
+
+		return $out;
+	}
+
+ 	public function ___getConfigInputfields() {
+
+		$inputfields = parent::___getConfigInputfields();
+
+		$fieldset = $this->modules->get('InputfieldFieldset');
+		$fieldset->label = $this->_('PageTable Render Layout Options');
+
+		$f = $this->wire('modules')->get('InputfieldCheckbox');
+		$f->attr('name', 'renderLayout');
+		$f->attr('value', 1);
+		if($this->renderLayout) $f->attr('checked', 'checked');
+		$f->label = $this->_('Render Layout instead of table rows?');
+		$f->description = $this->_('If checked, layout is rendered instead of table row.'); // renderLayout option description
+		$f->notes = $this->_('Make sure that your PageTable templates render only html fragments and not complete websites.');
+		//$f->collapsed = Inputfield::collapsedBlank;
+		$fieldset->append($f);
+
+
+		$f = $this->wire('modules')->get('InputfieldText');
+		$f->attr('name', 'pathToCSS');
+		$f->attr('value', $this->pathToCSS);
+		$f->showIf = "renderLayout=1";
+		$f->label = $this->_('Path to Stylesheet');
+		$f->description = $this->_('Custom CSS to include for styling pageTable entries in Admin.'); // page name format description
+		$f->notes = $this->_('Path is relative to your template folder.'); // page name format notes
+		$fieldset->append($f);
+
+		$f = $this->wire('modules')->get('InputfieldText');
+		$f->attr('name', 'pathToTemplates');
+		$f->attr('value', $this->pathToTemplates);
+		$f->showIf = "renderLayout=1";
+		$f->label = $this->_('Path to Templates');
+		$f->description = $this->_('If you use a delegated template approach, please provide your path to the templates (relative to templates directory).'); // page name format description
+		$f->notes = $this->_('For example "controllers/"'); // page name format notes
+		$fieldset->append($f);
+
+		$f = $this->wire('modules')->get('InputfieldCheckbox');
+		$f->attr('name', 'collapseUnpublished');
+		$f->attr('value', 1);
+		$f->showIf = "renderLayout=1";
+		//$f->attr('checked', 'checked');
+		if($this->collapseUnpublished) $f->attr('checked', 'checked');
+		$f->label = $this->_('Collapse unpublished PageTable parts?');
+		$f->description = $this->_('If checked, unpublished PageTable parts are rendered collapsed and can be opened on click.');
+		//$f->collapsed = Inputfield::collapsedBlank;
+		$fieldset->append($f);
+
+		$f = $this->wire('modules')->get('InputfieldCheckbox');
+		$f->attr('name', 'resetCSS');
+		$f->attr('value', 0);
+		$f->showIf = "renderLayout=1";
+		//$f->attr('checked', 'checked');
+		if($this->resetCSS) $f->attr('checked', 'checked');
+		$f->label = $this->_('Reset Admin CSS for rendered rows?');
+		$f->description = $this->_('If checked, the CSS for admin (for example for fonts etc.) gets reset inside the rendered rows, so no foreign styles and only your custom styles get applied.');
+		$f->notes = $this->_('Primarily makes sense for a 1:1 rendered layout but needs more work.');
+		//$f->collapsed = Inputfield::collapsedBlank;
+		$fieldset->append($f);
+
+
+		$inputfields->append($fieldset);
+
+        return $inputfields;
+    }
+
+}

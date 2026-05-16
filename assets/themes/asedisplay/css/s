@@ -1,0 +1,1 @@
+agrega la funcion dark/light scheme, en este momento tenemos la opcion dark por default, pero pudieramos agregar una light donde los colores se conservar pero el fondo seria blanco y los textos negros, solo los que no tengan fondos degradados e iconos, agrega un boton al header junto a las redes sociales que active esto

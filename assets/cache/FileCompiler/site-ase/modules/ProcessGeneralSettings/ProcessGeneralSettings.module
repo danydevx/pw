@@ -1,0 +1,519 @@
+<?php 
+
+/**
+ * ProcessWire General site settings module
+ *
+ * Allows to set global site settings 
+ *
+ * by Piotr Markiewicz (pmarki)
+ *
+ * ProcessWire 2.8.x (development), Copyright 2016 by Ryan Cramer
+ * https://processwire.com
+ *
+ *
+ */
+
+class ProcessGeneralSettings extends \ProcessWire\Process implements \ProcessWire\Module {
+
+	public static function getModuleInfo() {
+		return array(
+			'title' => \ProcessWire\__('General site settings (Process)', '/mnt/desarrollo/server/processwire/site-ase/modules/ProcessGeneralSettings/ProcessGeneralSettings.module'),
+			'summary' => \ProcessWire\__('Editing of global site settings, setup in General Settings Module', '/mnt/desarrollo/server/processwire/site-ase/modules/ProcessGeneralSettings/ProcessGeneralSettings.module'),
+			'version' => 122,
+			'permanent' => false, 
+			'autoload' => true,
+			'icon' => 'sliders', 
+			//'requires' => 'GeneralSettings',
+			'installs'	=> 'GeneralSettings',
+			'page' => array(
+				'name' => 'general-settings',
+				'parent' => 'setup',
+				'title' => 'General settings',
+				),
+			'permission' => 'general-settings',
+			"permissions" => ["general-settings" => "Access general settings page"],
+			);
+	}
+
+	/**
+	 * Initialize
+	 *
+	 */
+
+	public function init() {
+		$this->data = $this->modules->getConfig('GeneralSettings');
+		$page = $this->wire('page');
+
+		if ($this->wire('user')->isLoggedin() && $page && $page->process == 'ProcessGeneralSettings') {
+			$this->includeValidationAssets();
+		}
+	}
+
+	protected function includeValidationAssets() {
+		$jqv = $this->modules->get('JqueryValidate');
+		if ($jqv && method_exists($jqv, 'includeAssets')) {
+			$jqv->includeAssets();
+		} else {
+			$this->warning('JqueryValidate module is not available.');
+		}
+
+		$root = $this->config->urls->siteModules . 'ProcessGeneralSettings';
+		$this->config->scripts->add($root . '/ProcessSettingsValidate.js');
+	}
+
+
+	public function ___execute() {
+		$this->includeValidationAssets();
+
+		if ($this->input->post('submit_save')) {
+			$savedSettings = $this->saveValues();
+			if ($savedSettings === false) {
+				return $this->renderForm();
+			}
+			return $this->renderForm($savedSettings);
+			//wire('session')->redirect(\ProcessWire\wire('page')->url);
+		} else {
+			return $this->renderForm();
+		}
+	}
+
+	/**
+	 * Render form for admin page
+	 * 
+	 * @return string form markup
+	 *
+	 */
+	protected function renderForm($settings=null) {
+
+		if (!isset($this->data['settings'])) {
+			return 'Create settings in module configuration first.';
+		}
+
+		$data = $this->data;
+
+		$attrs = json_decode( $settings ?:$data['settings'], true);
+		if ($attrs === null) {
+			return 'Error decoding settings data.';
+		}
+
+		$form = $this->modules->get('InputfieldForm'); 
+		$form->attr('id', 'SettingsModule');
+		$form->attr('action', $this->wire('page')->url );
+
+		$imagePath = $this->ensureImagesDirectory();
+		$imageUrl = $this->config->urls->assets . 'files/general-settings/';
+		$hasImagePreview = false;
+		$parent = $form;
+		foreach ($attrs as $fset) {
+			if ($fset['type'] == 'Image' || $fset['type'] == 'File') {
+				$field = $this->modules->get('InputfieldFile');
+			} else {
+				$field = $this->modules->get('Inputfield'.$fset['type']);
+			}
+			$value = (isset($fset['value']) ? $fset['value'] : '');
+
+			//------- NEW --------
+			if($fset['type'] == 'FieldsetClose') {
+				$parent = $form;
+				continue;
+			}
+			//------- END NEW --------
+
+			if (!$field) {
+				$this->message('Unable to find field type ' .$fset['type']);
+				continue;
+			}
+			//set attrbs for all type of fields
+			$field->label = $fset['label'];
+			$field->columnWidth = (intval($fset['width']) >=10) ? $fset['width'] : 100;
+			$field->description = $fset['description'];
+
+			//------- NEW --------
+
+			// Placeholder
+			$field->placeholder = isset($fset['placeholder']) ? $fset['placeholder'] : '';
+
+			// Collapsed
+			if(isset($fset['collapsed']) && $fset['collapsed'] != 'Default') {
+				if($fset['collapsed'] == 'collapsedNever') $field->collapsed = \ProcessWire\Inputfield::collapsedNever;
+				if($fset['collapsed'] == 'collapsedBlank') $field->collapsed = \ProcessWire\Inputfield::collapsedBlank;
+				if($fset['collapsed'] == 'collapsedYes') $field->collapsed = \ProcessWire\Inputfield::collapsedYes;
+			}
+
+			// Markup
+			if ($fset['type'] == 'Markup') {
+				$field->markupText = '<p>' . $fset['description'] . '</p>';
+				$field->description = '';
+			}
+
+			if (!empty($fset['required']) && $fset['type'] != 'Fieldset' && $fset['type'] != 'FieldsetClose' && $fset['type'] != 'Markup') {
+				$field->required = 1;
+			}
+
+			//------- END NEW --------
+
+			if ($fset['type'] == 'Checkbox') {
+				$field->uncheckedValue = '0';
+				if($value === '1') {
+					$field->setAttribute('checked', 'checked'); 
+				}
+			}
+			if ($fset['type'] == 'URL') {
+				$field->set('noRelative', 1);
+			}
+			if ($fset['type'] == 'PageListSelect') {
+				$mode = isset($fset['page_parent_mode']) ? (string) $fset['page_parent_mode'] : 'id';
+				if ($mode === 'selector') {
+					$selector = isset($fset['page_parent_selector']) ? trim((string) $fset['page_parent_selector']) : '';
+					if ($selector === '') $selector = 'parent=1';
+					$parentPage = $this->wire('pages')->findOne($selector);
+					if ($parentPage && $parentPage->id) {
+						$field->parent_id = (int) $parentPage->id;
+					} else {
+						$field->parent_id = 1;
+						$this->warning(sprintf($this->_('PageListSelect "%s": selector did not match any page. Using parent ID 1.'), isset($fset['label']) ? $fset['label'] : ''));
+					}
+				} else {
+					$parentId = isset($fset['page_parent_id']) ? (int) $fset['page_parent_id'] : 1;
+					if ($parentId < 1) $parentId = 1;
+					$field->parent_id = $parentId;
+				}
+			}
+			if ($fset['type'] == 'Image') {
+				$extList = $this->sanitizeExtensions(isset($fset['image_extensions']) ? $fset['image_extensions'] : 'jpg,jpeg,png,webp,gif,svg');
+				$maxSizeKb = isset($fset['image_max_size']) ? (int) $fset['image_max_size'] : 1024;
+				$maxWidthPx = isset($fset['image_max_width']) ? (int) $fset['image_max_width'] : 1920;
+				if ($maxSizeKb < 1) $maxSizeKb = 1024;
+				if ($maxWidthPx < 1) $maxWidthPx = 1920;
+
+				$field->maxFiles = 1;
+				$field->extensions = implode(' ', $extList);
+				$field->destinationPath = $imagePath;
+				$field->useAjax = true;
+				$field->set('ajax', true);
+				$field->maxFileSize = $maxSizeKb;
+				$field->description = $fset['description'];
+				$field->notes = sprintf($this->_('Max size: %d KB | Max width: %d px | Allowed: %s'), $maxSizeKb, $maxWidthPx, implode(', ', $extList));
+				$field->attr('data-pgs-image-max-size', $maxSizeKb);
+				$field->attr('data-pgs-image-max-width', $maxWidthPx);
+				$field->attr('data-pgs-image-extensions', implode(',', $extList));
+			}
+			if ($fset['type'] == 'File') {
+				$extList = $this->sanitizeFileExtensions(isset($fset['file_extensions']) ? $fset['file_extensions'] : 'pdf,doc,docx,xls,xlsx,ppt,pptx,txt');
+				$maxSizeKb = isset($fset['file_max_size']) ? (int) $fset['file_max_size'] : 2048;
+				if ($maxSizeKb < 1) $maxSizeKb = 2048;
+
+				$field->maxFiles = 1;
+				$field->extensions = implode(' ', $extList);
+				$field->destinationPath = $imagePath;
+				$field->useAjax = true;
+				$field->set('ajax', true);
+				$field->maxFileSize = $maxSizeKb;
+				$field->description = $fset['description'];
+				$field->notes = sprintf($this->_('Max size: %d KB | Allowed: %s'), $maxSizeKb, implode(', ', $extList));
+				$field->attr('data-pgs-file-max-size', $maxSizeKb);
+				$field->attr('data-pgs-file-extensions', implode(',', $extList));
+
+				if ($value && is_file($imagePath . $value)) {
+					$safeFile = $this->wire('sanitizer')->filename($value);
+					$previewField = $this->modules->get('InputfieldMarkup');
+					$previewField->label = \ProcessWire\__('Current file', '/mnt/desarrollo/server/processwire/site-ase/modules/ProcessGeneralSettings/ProcessGeneralSettings.module');
+					$previewField->value = "<p><a href='{$imageUrl}" . rawurlencode($safeFile) . "' target='_blank'>{$safeFile}</a></p>";
+					$parent->append($previewField);
+				}
+			}
+
+			// enabled use of checkboxes
+			if ($fset['type'] == 'Select' || $fset['type'] == 'Radios' || $fset['type'] == 'Checkboxes') {
+				$tokens = explode(',', trim((string) $fset['select'], ','));
+				foreach ($tokens as $token) {
+					$token = trim($token);
+					if ($token === '') continue;
+
+					$optValue = '';
+					$optLabel = '';
+
+					if (strpos($token, ':') !== false) {
+						list($rawValue, $rawLabel) = explode(':', $token, 2);
+						$optValue = $this->wire('sanitizer')->name($rawValue);
+						$optLabel = trim($rawLabel);
+					} else {
+						$optLabel = $token;
+						$optValue = $this->wire('sanitizer')->name($token);
+					}
+
+					if ($optValue === '') continue;
+					if ($optLabel === '') $optLabel = $optValue;
+
+					if ($value == $optValue) {
+						$field->addOption($optValue, $optLabel, array('selected' => 1));
+					} else {
+						$field->addOption($optValue, $optLabel);
+					}
+				}
+			}
+			if ($fset['type'] == 'Integer') {
+				$field->setAttribute('type', 'number');
+			}
+			if ($fset['type'] == 'Checkboxes') {
+				$maxSelected = isset($fset['checkboxes_max_selected']) ? (int) $fset['checkboxes_max_selected'] : 0;
+				if ($maxSelected < 0) $maxSelected = 0;
+				if ($maxSelected > 100) $maxSelected = 100;
+				if ($maxSelected > 0) {
+					$field->notes = trim((string) $field->notes . ' ' . sprintf($this->_('You can select up to %d options.'), $maxSelected));
+				}
+				$field->attr('data-pgs-checkboxes-max', $maxSelected);
+			}
+
+			//fieldset or normal field
+			if ($fset['type'] == 'Fieldset') {
+				$field->addClass('fset_red');
+				$parent = $field;
+				$form->append($field);
+			} else {
+				$field->attr('name', $fset['api']);
+				$field->attr('value', $value); 
+				$parent->append($field);
+
+				if ($fset['type'] == 'Image' && $value && is_file($imagePath . $value)) {
+					$safeFile = $this->wire('sanitizer')->filename($value);
+					$previewField = $this->modules->get('InputfieldMarkup');
+					$previewField->label = \ProcessWire\__('Current image', '/mnt/desarrollo/server/processwire/site-ase/modules/ProcessGeneralSettings/ProcessGeneralSettings.module');
+					$previewField->value = "<p><a class='js-pgs-image-lightbox' href='{$imageUrl}" . rawurlencode($safeFile) . "'>{$safeFile}</a></p>"
+						. "<p><a class='js-pgs-image-lightbox' href='{$imageUrl}" . rawurlencode($safeFile) . "'><img src='{$imageUrl}" . rawurlencode($safeFile) . "' alt='' style='max-width:220px;height:auto;cursor:zoom-in;'></a></p>";
+					$parent->append($previewField);
+					$hasImagePreview = true;
+				}
+			}
+
+		}
+
+
+		$f = $this->modules->get('InputfieldSubmit'); 
+		$f->attr('name', 'submit_save'); 
+		$f->attr('value', $this->_('Save')); 
+		$f->addClass('head_button_clone');
+		$f->icon = 'save';
+
+		$form->add($f);
+
+		if ($hasImagePreview) {
+			$magnific = $this->modules->get('JqueryMagnificPressets');
+			if ($magnific && method_exists($magnific, 'renderInitScript')) {
+				$magnificMarkup = $this->modules->get('InputfieldMarkup');
+				$magnificMarkup->value = $magnific->renderInitScript('.js-pgs-image-lightbox', 'lightbox');
+				$form->add($magnificMarkup);
+			}
+		}
+
+		return $form->render();
+	}
+
+	/**
+	 * Save values provided by user to module config data
+	 * 
+	 */
+	protected function saveValues() {
+
+		$old = $this->data;
+		$data = json_decode($old['settings'], true);
+		$new = array();
+		$hasError = false;
+		$imagePath = $this->ensureImagesDirectory();
+		foreach ($data as $key => $field) {
+			$new[$key] = $field;
+			$inputValue = $this->wire('input')->{$field['api']};
+
+			if (isset($field['type']) && $field['type'] == 'Image') {
+				$inputValue = $this->processImageUpload($field, isset($field['value']) ? $field['value'] : '', $imagePath);
+				if ($inputValue === false) {
+					$hasError = true;
+					$inputValue = isset($field['value']) ? $field['value'] : '';
+				}
+			}
+
+			if (isset($field['type']) && $field['type'] == 'File') {
+				$inputValue = $this->processGenericFileUpload($field, isset($field['value']) ? $field['value'] : '', $imagePath);
+				if ($inputValue === false) {
+					$hasError = true;
+					$inputValue = isset($field['value']) ? $field['value'] : '';
+				}
+			}
+
+			if (!empty($field['required']) && isset($field['type']) && $field['type'] != 'Fieldset' && $field['type'] != 'FieldsetClose' && $field['type'] != 'Markup') {
+				if ($field['type'] == 'Checkbox') {
+					if ($inputValue !== '1' && $inputValue !== 1) {
+						$this->error(sprintf($this->_('Field "%s" is required.'), $field['label']));
+						$hasError = true;
+					}
+				} else {
+					if (is_array($inputValue)) {
+						$inputValue = array_filter($inputValue, function($v) {
+							return trim((string) $v) !== '';
+						});
+						if (!count($inputValue)) {
+							$this->error(sprintf($this->_('Field "%s" is required.'), $field['label']));
+							$hasError = true;
+						}
+					} else {
+						if (trim((string) $inputValue) === '') {
+							$this->error(sprintf($this->_('Field "%s" is required.'), $field['label']));
+							$hasError = true;
+						}
+					}
+				}
+			}
+
+			if (isset($field['type']) && $field['type'] == 'Checkboxes') {
+				$maxSelected = isset($field['checkboxes_max_selected']) ? (int) $field['checkboxes_max_selected'] : 0;
+				if ($maxSelected < 0) $maxSelected = 0;
+				if ($maxSelected > 100) $maxSelected = 100;
+				if ($maxSelected > 0) {
+					$countSelected = 0;
+					if (is_array($inputValue)) {
+						$countSelected = count(array_filter($inputValue, function($v) {
+							return trim((string) $v) !== '';
+						}));
+					} elseif (trim((string) $inputValue) !== '') {
+						$countSelected = 1;
+					}
+					if ($countSelected > $maxSelected) {
+						$this->error(sprintf($this->_('Field "%s" allows maximum %d selections.'), $field['label'], $maxSelected));
+						$hasError = true;
+					}
+				}
+			}
+
+			$new[$key]['value'] = $inputValue;
+		}
+
+		if ($hasError) {
+			return false;
+		}
+
+		$old['settings'] = json_encode($new);
+		\ProcessWire\wire('modules')->saveConfig('GeneralSettings', $old);
+		$this->message('Site settings saved');	
+		return $old['settings'];
+	}
+
+	protected function ensureImagesDirectory() {
+		$path = $this->config->paths->assets . 'files/general-settings/';
+		if (!is_dir($path)) {
+			\ProcessWire\wiremkdir($path, true);
+		}
+		return $path;
+	}
+
+	protected function processImageUpload($fieldConfig, $currentValue, $path) {
+		$fieldName = isset($fieldConfig['api']) ? $fieldConfig['api'] : '';
+		if ($fieldName === '') return $this->wire('sanitizer')->filename($currentValue);
+
+		$extList = $this->sanitizeExtensions(isset($fieldConfig['image_extensions']) ? $fieldConfig['image_extensions'] : 'jpg,jpeg,png,webp,gif,svg');
+		$maxSizeKb = isset($fieldConfig['image_max_size']) ? (int) $fieldConfig['image_max_size'] : 1024;
+		$maxWidthPx = isset($fieldConfig['image_max_width']) ? (int) $fieldConfig['image_max_width'] : 1920;
+		if ($maxSizeKb < 1) $maxSizeKb = 1024;
+		if ($maxWidthPx < 1) $maxWidthPx = 1920;
+
+		$upload = new \ProcessWire\WireUpload($fieldName);
+		$upload->setDestinationPath($path);
+		$upload->setValidExtensions($extList);
+		$upload->setMaxFiles(1);
+		$upload->setOverwrite(true);
+		$upload->setMaxFileSize($maxSizeKb * 1024);
+		$files = $upload->execute();
+
+		if (!count($files)) {
+			return $this->wire('sanitizer')->filename($currentValue);
+		}
+
+		$file = $this->wire('sanitizer')->filename($files[0]);
+		$full = $path . $file;
+		$size = is_file($full) ? filesize($full) : 0;
+		if ($size > ($maxSizeKb * 1024)) {
+			if (is_file($full)) @unlink($full);
+			$this->error(sprintf($this->_('Field "%s": image exceeds max size of %d KB.'), $fieldConfig['label'], $maxSizeKb));
+			return false;
+		}
+
+		$imgInfo = @getimagesize($full);
+		if ($imgInfo && isset($imgInfo[0]) && (int) $imgInfo[0] > $maxWidthPx) {
+			if (is_file($full)) @unlink($full);
+			$this->error(sprintf($this->_('Field "%s": image width exceeds max width of %d px.'), $fieldConfig['label'], $maxWidthPx));
+			return false;
+		}
+
+		if ($currentValue && $currentValue !== $file) {
+			$old = $path . $this->wire('sanitizer')->filename($currentValue);
+			if (is_file($old)) @unlink($old);
+		}
+
+		return $file;
+	}
+
+	protected function sanitizeExtensions($raw) {
+		$parts = explode(',', strtolower((string) $raw));
+		$allowed = array('jpg','jpeg','png','webp','gif','svg');
+		$out = array();
+		foreach ($parts as $p) {
+			$p = trim($p);
+			if (!$p) continue;
+			if (in_array($p, $allowed, true)) $out[] = $p;
+		}
+		$out = array_values(array_unique($out));
+		if (!count($out)) $out = $allowed;
+		return $out;
+	}
+
+	protected function sanitizeFileExtensions($raw) {
+		$parts = explode(',', strtolower((string) $raw));
+		$out = array();
+		foreach ($parts as $p) {
+			$p = trim($p);
+			if (!$p) continue;
+			$p = preg_replace('/[^a-z0-9]/', '', $p);
+			if ($p !== '') $out[] = $p;
+		}
+		$out = array_values(array_unique($out));
+		if (!count($out)) $out = array('pdf','doc','docx','xls','xlsx','ppt','pptx','txt');
+		return $out;
+	}
+
+	protected function processGenericFileUpload($fieldConfig, $currentValue, $path) {
+		$fieldName = isset($fieldConfig['api']) ? $fieldConfig['api'] : '';
+		if ($fieldName === '') return $this->wire('sanitizer')->filename($currentValue);
+
+		$extList = $this->sanitizeFileExtensions(isset($fieldConfig['file_extensions']) ? $fieldConfig['file_extensions'] : 'pdf,doc,docx,xls,xlsx,ppt,pptx,txt');
+		$maxSizeKb = isset($fieldConfig['file_max_size']) ? (int) $fieldConfig['file_max_size'] : 2048;
+		if ($maxSizeKb < 1) $maxSizeKb = 2048;
+
+		$upload = new \ProcessWire\WireUpload($fieldName);
+		$upload->setDestinationPath($path);
+		$upload->setValidExtensions($extList);
+		$upload->setMaxFiles(1);
+		$upload->setOverwrite(true);
+		$upload->setMaxFileSize($maxSizeKb * 1024);
+		$files = $upload->execute();
+
+		if (!count($files)) return $this->wire('sanitizer')->filename($currentValue);
+
+		$file = $this->wire('sanitizer')->filename($files[0]);
+		$full = $path . $file;
+		$size = is_file($full) ? filesize($full) : 0;
+		if ($size > ($maxSizeKb * 1024)) {
+			if (is_file($full)) @unlink($full);
+			$this->error(sprintf($this->_('Field "%s": file exceeds max size of %d KB.'), $fieldConfig['label'], $maxSizeKb));
+			return false;
+		}
+
+		if ($currentValue && $currentValue !== $file) {
+			$old = $path . $this->wire('sanitizer')->filename($currentValue);
+			if (is_file($old)) @unlink($old);
+		}
+
+		return $file;
+	}
+
+
+
+}

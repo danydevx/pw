@@ -1,0 +1,40 @@
+<?php
+class FieldtypePageTableExtended extends \ProcessWire\FieldtypePageTable {
+
+        public static function getModuleInfo() {
+                return array(
+                        'title' => \ProcessWire\__('PageTable extended'), // Module Title
+                        'summary' => \ProcessWire\__('Extends PageTable entries for rendering in admin', '/mnt/desarrollo/server/processwire/site-ase/modules/PageTableExtended-master/FieldtypePageTableExtended.module'), // Module summary
+                        'version' => 233,
+                        'requires' => array('FieldtypePageTable'),
+                        'installs' => 'InputfieldPageTableExtended',
+                        'autoload' => false,
+                        );
+        }
+
+        public function init() {
+                parent::init();
+        }
+
+        public function ready() {
+                parent::ready();
+        }
+
+        /**
+         * Get the Inputfield used for input by PageTableExtended
+         *
+         * @param Page $page
+         * @param Field $field
+         * @return Inputfield
+         *
+         */
+        public function getInputfield(\ProcessWire\Page $page, \ProcessWire\Field $field) {
+                $inputfield = $this->modules->get('InputfieldPageTableExtended');
+                $inputfield->attr('value', $page->getUnformatted($field->name));
+                return $inputfield;
+        }
+
+
+
+
+}
