@@ -985,3 +985,4 @@
 2026-05-16 08:17:28	guest	http://pw.local/http404/site-pw/assets/themes/base/styles/main.less	Filename doesn't exist: /mnt/desarrollo/server/processwire/site-pw/templates/views/pages/page-error.view.php (/wire/core/TemplateFile.php:178)
 2026-05-16 08:18:28	guest	http://pw.local/http404/site-pw/assets/themes/base/styles/main.less	Filename doesn't exist: /mnt/desarrollo/server/processwire/site-pw/templates/views/pages/page-error.view.php (/wire/core/TemplateFile.php:178)
 2026-05-16 08:19:28	guest	http://pw.local/http404/site-pw/assets/themes/base/styles/main.less	Filename doesn't exist: /mnt/desarrollo/server/processwire/site-pw/templates/views/pages/page-error.view.php (/wire/core/TemplateFile.php:178)
+2026-05-16 08:20:28	guest	http://pw.local/http404/site-pw/assets/themes/base/styles/main.less	Filename doesn't exist: /mnt/desarrollo/server/processwire/site-pw/templates/views/pages/page-error.view.php (/wire/core/TemplateFile.php:178)
