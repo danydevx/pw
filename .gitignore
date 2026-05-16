@@ -25,18 +25,7 @@ pwsublime-project.sublime-workspace
 /dist/
 /build/
 
-# ProcessWire cache/files
-/site/assets/
-/site/assets/cache/
-/site/assets/logs/
-/site/assets/sessions/
-/site/assets/backups/
-/site/assets/tmp/
-/site/assets/exports/
-/site/assets/ProCache-*/
-
-/site/assets/files/
-/site/assets/pwpc-*/
+ 
 
 # User uploads (opcional)
 #/site/assets/files/
