@@ -1,0 +1,293 @@
+<?php namespace ProcessWire;
+
+class WebformSubmissions extends WireData implements Module, ConfigurableModule {
+
+    public static function getModuleInfo() {
+        return [
+            'title' => 'WebformSubmissions',
+            'version' => 1,
+            'summary' => 'Stores Webform submissions in database table.',
+            'autoload' => true,
+            'singular' => true,
+        ];
+    }
+
+    protected function defaults() {
+        return [
+            'notification_from_email' => 'no-reply@orpot.net',
+            'notification_from_name' => 'Webform Notifier',
+            'thank_you_message' => 'Gracias por su tiempo',
+        ];
+    }
+
+    protected function cfg() {
+        $modules = $this->wire('modules');
+        $cfg = (array) $modules->getConfig($this);
+        if(!count($cfg)) {
+            $cfg = (array) $modules->getConfig($this->className());
+        }
+        return array_replace($this->defaults(), $cfg);
+    }
+
+    public function ___install() {
+        $this->createTable();
+    }
+
+    protected function createTable() {
+        $table = $this->getTableName();
+        $sql = "CREATE TABLE IF NOT EXISTS `{$table}` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `webform_id` INT UNSIGNED NOT NULL,
+            `payload_json` MEDIUMTEXT NOT NULL,
+            `meta_json` TEXT NULL,
+            `ip` VARCHAR(45) NOT NULL DEFAULT '',
+            `user_agent` VARCHAR(255) NOT NULL DEFAULT '',
+            `created_at` DATETIME NOT NULL,
+            PRIMARY KEY (`id`),
+            KEY `webform_id_created` (`webform_id`, `created_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        $this->wire('database')->exec($sql);
+    }
+
+    public function getTableName() {
+        return 'webform_submissions';
+    }
+
+    public function saveSubmission($webformId, array $payload, array $meta = []) {
+        $db = $this->wire('database');
+        $table = $this->getTableName();
+
+        $stmt = $db->prepare("INSERT INTO `{$table}` (webform_id, payload_json, meta_json, ip, user_agent, created_at) VALUES (:webform_id, :payload_json, :meta_json, :ip, :user_agent, NOW())");
+        $userAgent = isset($_SERVER['HTTP_USER_AGENT']) ? (string) $_SERVER['HTTP_USER_AGENT'] : '';
+        $stmt->execute([
+            ':webform_id' => (int) $webformId,
+            ':payload_json' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ':meta_json' => json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ':ip' => (string) $this->wire('session')->getIP(),
+            ':user_agent' => substr($userAgent, 0, 255),
+        ]);
+
+        return (int) $db->lastInsertId();
+    }
+
+    public function getSubmissionsByWebform($webformId, $limit = 200) {
+        $db = $this->wire('database');
+        $table = $this->getTableName();
+        $limit = max(1, (int) $limit);
+        $stmt = $db->prepare("SELECT id, webform_id, payload_json, meta_json, ip, user_agent, created_at FROM `{$table}` WHERE webform_id=:webform_id ORDER BY id DESC LIMIT {$limit}");
+        $stmt->execute([':webform_id' => (int) $webformId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+
+    public function deleteSubmissionById($webformId, $submissionId) {
+        $webformId = (int) $webformId;
+        $submissionId = (int) $submissionId;
+        if($webformId < 1 || $submissionId < 1) return false;
+
+        $db = $this->wire('database');
+        $table = $this->getTableName();
+        $stmt = $db->prepare("DELETE FROM `{$table}` WHERE webform_id=:webform_id AND id=:id LIMIT 1");
+        $stmt->execute([
+            ':webform_id' => $webformId,
+            ':id' => $submissionId,
+        ]);
+        return $stmt->rowCount() > 0;
+    }
+
+    public function deleteSubmissionsByIds($webformId, array $ids) {
+        $webformId = (int) $webformId;
+        if($webformId < 1 || !count($ids)) return 0;
+
+        $cleanIds = [];
+        foreach($ids as $id) {
+            $id = (int) $id;
+            if($id > 0) $cleanIds[] = $id;
+        }
+        $cleanIds = array_values(array_unique($cleanIds));
+        if(!count($cleanIds)) return 0;
+
+        $db = $this->wire('database');
+        $table = $this->getTableName();
+        $placeholders = implode(',', array_fill(0, count($cleanIds), '?'));
+        $sql = "DELETE FROM `{$table}` WHERE webform_id=? AND id IN ({$placeholders})";
+        $stmt = $db->prepare($sql);
+        $params = array_merge([$webformId], $cleanIds);
+        $stmt->execute($params);
+        return (int) $stmt->rowCount();
+    }
+
+    public function deleteAllSubmissionsByWebform($webformId) {
+        $webformId = (int) $webformId;
+        if($webformId < 1) return 0;
+
+        $db = $this->wire('database');
+        $table = $this->getTableName();
+        $stmt = $db->prepare("DELETE FROM `{$table}` WHERE webform_id=:webform_id");
+        $stmt->execute([':webform_id' => $webformId]);
+        return (int) $stmt->rowCount();
+    }
+
+    public function sendSubmissionNotification(Page $webformPage, array $payload) {
+        $recipient = trim((string) $webformPage->webform_recipient);
+        if($recipient === '') return false;
+
+        $subject = trim((string) $webformPage->webform_subject);
+        if($subject === '') {
+            $subject = 'Nuevo envio del formulario: ' . (string) $webformPage->title;
+        }
+        $submittedAt = date('Y-m-d H:i:s');
+        $subject .= ' | ' . $submittedAt;
+
+        $domain = parse_url((string) $webformPage->httpUrl(), PHP_URL_HOST);
+        if(!$domain) $domain = parse_url((string) wire('config')->httpHost, PHP_URL_HOST);
+        if(!$domain) $domain = (string) wire('config')->httpHost;
+
+        $lines = [];
+        $lines[] = 'Se recibio un nuevo envio del formulario.';
+        $lines[] = 'Formulario: ' . (string) $webformPage->title;
+        $lines[] = 'Pagina: ' . (string) $domain;
+        $lines[] = 'Enviado el: ' . $submittedAt;
+        $lines[] = '';
+        $lines[] = 'Datos del envio:';
+        $fieldMap = $this->buildWebformFieldMap($webformPage);
+        foreach($payload as $key => $value) {
+            $field = isset($fieldMap[$key]) ? $fieldMap[$key] : null;
+            $label = $field && isset($field['label']) && trim((string) $field['label']) !== ''
+                ? (string) $field['label']
+                : $this->humanizeApiKey((string) $key);
+
+            if(is_array($value)) {
+                $mapped = [];
+                foreach($value as $v) {
+                    $mapped[] = $this->resolveOptionLabel($field, (string) $v);
+                }
+                $value = implode(', ', $mapped);
+            } else {
+                $value = $this->resolveOptionLabel($field, (string) $value);
+            }
+            $lines[] = $label . ': ' . (string) $value;
+        }
+
+        $body = implode("\n", $lines);
+
+        $cfg = $this->cfg();
+        $fromEmail = $this->wire('sanitizer')->email((string) ($cfg['notification_from_email'] ?? ''));
+        $fromName = $this->wire('sanitizer')->text((string) ($cfg['notification_from_name'] ?? ''));
+        if($fromEmail === '') $fromEmail = 'no-reply@' . ((string) $domain ?: 'localhost');
+        if($fromName === '') $fromName = 'Webform Notifier';
+
+        try {
+            // Use core WireMail directly to avoid deprecated warnings
+            // from old WireMailSmtp adapters on PHP 8.2+.
+            $mail = new WireMail();
+            $mail->to($recipient)
+                ->from($fromEmail, $fromName)
+                ->subject($subject)
+                ->body($body);
+            return (bool) $mail->send();
+        } catch(\Throwable $e) {
+            return false;
+        }
+    }
+
+    public function getThankYouMessage() {
+        $cfg = $this->cfg();
+        $msg = $this->wire('sanitizer')->text((string) ($cfg['thank_you_message'] ?? ''));
+        if($msg === '') $msg = 'Gracias por su tiempo';
+        return $msg;
+    }
+
+    public function getModuleConfigInputfields(array $data) {
+        $modules = $this->wire('modules');
+        $inputfields = $modules->get('InputfieldWrapper');
+
+        $cfg = array_replace($this->defaults(), $data);
+
+        $fromEmail = $modules->get('InputfieldEmail');
+        $fromEmail->name = 'notification_from_email';
+        $fromEmail->label = 'Email remitente';
+        $fromEmail->description = 'Email usado como remitente en notificaciones de formularios.';
+        $fromEmail->attr('value', (string) $cfg['notification_from_email']);
+        $inputfields->add($fromEmail);
+
+        $fromName = $modules->get('InputfieldText');
+        $fromName->name = 'notification_from_name';
+        $fromName->label = 'Nombre remitente';
+        $fromName->description = 'Nombre mostrado como remitente en notificaciones de formularios.';
+        $fromName->attr('value', (string) $cfg['notification_from_name']);
+        $inputfields->add($fromName);
+
+        $thanks = $modules->get('InputfieldText');
+        $thanks->name = 'thank_you_message';
+        $thanks->label = 'Mensaje de agradecimiento';
+        $thanks->description = 'Mensaje que ve el usuario cuando el formulario se envia correctamente.';
+        $thanks->attr('value', (string) $cfg['thank_you_message']);
+        $inputfields->add($thanks);
+
+        $usage = $modules->get('InputfieldMarkup');
+        $usage->label = 'Snippet de uso';
+        $usage->value = '<p>Uso manual para guardar un envio:</p>'
+            . '<pre><code>&lt;?php namespace ProcessWire;'
+            . "\n"
+            . "\$sub = wire('modules')-&gt;get('WebformSubmissions');"
+            . "\n"
+            . "if(\$sub) \$sub-&gt;saveSubmission(123, ['nombre' =&gt; 'Juan']);"
+            . "\n"
+            . '?&gt;</code></pre>';
+        $inputfields->add($usage);
+
+        return $inputfields;
+    }
+
+    protected function buildWebformFieldMap(Page $webformPage) {
+        $json = (string) $webformPage->webform_json;
+        $arr = json_decode($json, true);
+        if(!is_array($arr)) return [];
+
+        $map = [];
+        foreach($arr as $field) {
+            if(!is_array($field) || empty($field['api'])) continue;
+            $api = wire('sanitizer')->name((string) $field['api']);
+            if($api === '') continue;
+            $map[$api] = $field;
+        }
+        return $map;
+    }
+
+    protected function resolveOptionLabel($field, $value) {
+        if(!is_array($field) || !isset($field['type'])) return $value;
+        $type = (string) $field['type'];
+        if($type !== 'Select' && $type !== 'Radios' && $type !== 'Checkboxes') return $value;
+
+        $select = isset($field['select']) ? (string) $field['select'] : '';
+        if($select === '') return $value;
+
+        $tokens = explode(',', trim($select, ','));
+        foreach($tokens as $token) {
+            $token = trim($token);
+            if($token === '') continue;
+
+            if(strpos($token, ':') !== false) {
+                list($rawValue, $rawLabel) = explode(':', $token, 2);
+                $optValue = wire('sanitizer')->name($rawValue);
+                $optLabel = rawurldecode(trim($rawLabel));
+            } else {
+                $optValue = wire('sanitizer')->name($token);
+                $optLabel = rawurldecode($token);
+            }
+
+            if($optValue !== '' && (string) $optValue === (string) $value) {
+                return $optLabel !== '' ? $optLabel : $optValue;
+            }
+        }
+
+        return $value;
+    }
+
+    protected function humanizeApiKey($key) {
+        $key = str_replace(['_', '-'], ' ', (string) $key);
+        $key = trim(preg_replace('/\s+/', ' ', $key));
+        if($key === '') return '';
+        return ucfirst($key);
+    }
+}

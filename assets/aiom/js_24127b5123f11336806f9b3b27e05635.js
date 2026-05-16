@@ -1,0 +1,6 @@
+/** Generated: Wed, 13 May 2026 19:06:56 -0600 // Powered by AIOM+ v4.1.0 **/
+$(document).ready(function(){function wrapLetters(selector=".animation-heading"){$(selector).each(function(){const $node=$(this);if($node.data("wrapped"))return;const text=$node.text().trim();$node.empty();const words=text.split(/\s+/);words.forEach((word,wIndex)=>{const $wordSpan=$("<span/>",{class:"word"});[...word].forEach((ch)=>{$wordSpan.append($("<span/>",{class:"letter",text:ch,}));});$node.append($wordSpan);if(wIndex<words.length-1){$node.append(" ");}});$node.data("wrapped",true);});}
+function animateLettersStacked(selector=".animation-heading",pause=1000,duration=2000){const $letters=$(`${selector} .letter`);if(!$letters.length)return;const totalDuration=duration;const interval=totalDuration / $letters.length;let index=0;function step(){if(index===0){$letters.removeClass("active");}
+const $letter=$letters.eq(index);$letter[0].offsetHeight;$letter.addClass("active");index++;if(index<$letters.length){setTimeout(step,interval);}else{setTimeout(()=>{index=0;step();},pause);}}
+step();}
+wrapLetters(".animation-heading");animateLettersStacked(".animation-heading",2000,2000);});

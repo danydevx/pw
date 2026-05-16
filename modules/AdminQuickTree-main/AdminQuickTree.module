@@ -1,0 +1,23 @@
+<?php
+
+namespace ProcessWire;
+
+class AdminQuickTree extends WireData implements Module {
+
+	public static function getModuleInfo() {
+		return array(
+			'title' => 'Quick Tree', 
+			'summary' => __('Direct access to page tree navigation inside page dropdown menu.'),
+			'version' => '0.0.1',
+			'author' => 'Jan Ploch',
+			'icon' => 'sitemap',
+			'autoload' => 'template=admin', 
+		);
+	}
+
+	public function init() {
+		$this->config->styles->add($this->config->urls->AdminQuickTree . "AdminQuickTree.css?v=" . $this->modules->getModuleInfo('AdminQuickTree')['version']);
+		$this->config->scripts->add($this->config->urls->AdminQuickTree . "AdminQuickTree.js'");
+	}
+
+}

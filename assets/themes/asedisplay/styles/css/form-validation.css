@@ -1,0 +1,139 @@
+#login-form {
+  /* Quita cualquier ancho máximo heredado de PW */
+  .InputfieldMaxWidth { max-width: none !important; }
+
+  /* Labels */
+  label.form-label {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .375rem;
+    font-weight: 500;
+  }
+
+  /* Oculta el ícono de toggle de PW (no aplica en frontend) */
+  .toggle-icon { display: none !important; }
+
+  /* Spacing consistente entre items */
+  .mb-3 { margin-bottom: 1rem !important; }
+
+  /* Placeholders más sutiles */
+  .form-control::placeholder { color: var(--bs-secondary-color); opacity: 1; }
+
+  /* Foco accesible (refina el de BS para inputs) */
+  .form-control:focus,
+  .form-select:focus {
+    outline: 0;
+    box-shadow: 0 0 0 .25rem rgba(13,110,253,.15);
+  }
+
+  /* ===========================
+     Validación (frontend + backend)
+     =========================== */
+
+  /* Evita checks verdes antes del primer submit */
+  &.needs-validation:not(.was-validated) {
+    .form-control:valid,
+    .form-select:valid {
+      background-image: none !important;
+      box-shadow: none !important;
+    }
+    .form-control.is-valid,
+    .form-select.is-valid {
+      border-color: var(--bs-border-color) !important;
+      background-image: none !important;
+      box-shadow: none !important;
+    }
+  }
+
+  /* Anillos sutiles para error/ok (cuando aplique) */
+  .form-control.is-invalid,
+  &.was-validated .form-control:invalid {
+    box-shadow: 0 0 0 .2rem rgba(220, 53, 69, .12);
+  }
+  .form-control.is-valid,
+  &.was-validated .form-control:valid {
+    box-shadow: 0 0 0 .2rem rgba(25, 135, 84, .10);
+  }
+
+  /* Feedback oculto por defecto, salvo cuando backend lo fuerza con d-block */
+  .invalid-feedback { display: none; }
+  .invalid-feedback.d-block { display: block !important; }
+
+  /* Mostrar feedback según estado (frontend) */
+  &.was-validated .form-control:invalid ~ .invalid-feedback,
+  .form-control.is-invalid ~ .invalid-feedback {
+    display: block;
+  }
+
+  /* Evita doble margen cuando coinciden help + error */
+  .form-text { margin-top: .25rem; }
+  .invalid-feedback { margin-top: .25rem; }
+
+  /* ===========================
+     Input group (botón mostrar contraseña)
+     =========================== */
+
+  /* Si usas un .input-group alrededor del password */
+  .input-group {
+    .password-toggle {
+      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+    }
+  }
+
+  /* Si el invalid-feedback va después del grupo, mantenerlo visible en error */
+  .input-group + .invalid-feedback { display: none; }
+  &.was-validated .input-group:has(.form-control:invalid) + .invalid-feedback,
+  .input-group:has(.form-control.is-invalid) + .invalid-feedback {
+    display: block;
+  }
+
+  /* ===========================
+     Botón submit
+     =========================== */
+  button[type="submit"].btn {
+    font-weight: 600;
+    padding: .625rem 1rem;
+  }
+
+  /* ===========================
+     Fieldset / legend
+     =========================== */
+  fieldset { margin-bottom: 1rem; }
+  legend.h6 { margin-bottom: .5rem; }
+
+  /* ===========================
+     Hidden / tokens
+     =========================== */
+  /* Si algún renderer agregara elementos visibles para hidden, neutralízalos */
+  .InputfieldHidden { visibility: hidden; }
+
+  /* ===========================
+     Dark-mode friendly (si usas BS vars)
+     =========================== */
+  @media (prefers-color-scheme: dark) {
+    .form-control::placeholder { color: var(--bs-secondary-color); }
+  }
+}
+
+/* Scope por formularios típicos */
+#forgot-form .form-control:focus,
+#reset-form .form-control:focus {
+  outline: 0;
+  box-shadow: 0 0 0 .25rem rgba(13,110,253,.15);
+}
+
+.needs-validation .invalid-feedback { display: none; }
+.needs-validation .invalid-feedback.d-block { display: block !important; }
+
+.needs-validation.was-validated .form-control:invalid ~ .invalid-feedback,
+.needs-validation .form-control.is-invalid ~ .invalid-feedback {
+  display: block;
+}
+
+.input-group + .invalid-feedback { display: none; }
+.needs-validation.was-validated .input-group:has(.form-control:invalid) + .invalid-feedback,
+.needs-validation .input-group:has(.form-control.is-invalid) + .invalid-feedback {
+  display: block;
+}

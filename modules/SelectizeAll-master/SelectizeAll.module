@@ -1,0 +1,133 @@
+<?php namespace ProcessWire;
+
+class SelectizeAll extends WireData implements Module, ConfigurableModule {
+
+	/**
+	 * Module information
+	 */
+	public static function getModuleInfo() {
+		return array(
+			'title' => 'Selectize All',
+			'summary' => 'Enables Selectize on all InputfieldSelect and InputfieldAsmSelect fields in the ProcessWire admin.',
+			'version' => '0.1.4',
+			'author' => 'Robin Sallis',
+			'href' => 'https://github.com/Toutouwai/SelectizeAll',
+			'icon' => 'chevron-down',
+			'autoload' => 'template=admin',
+			'requires' => 'ProcessWire>=3.0.67, PHP>=5.4.0',
+		);
+	}
+
+	/**
+	 * Construct
+	 */
+	public function __construct() {
+		parent::__construct();
+		$this->allowed_inputfields = ['select', 'asm_select'];
+	}
+
+	/**
+	 * Ready
+	 */
+	public function ready() {
+		$allow_select = in_array('select', $this->allowed_inputfields);
+		$allow_asm_select = in_array('asm_select', $this->allowed_inputfields);
+
+		if($allow_select || $allow_asm_select) {
+
+			// Load Selectize
+			/** @var JqueryUI $jQueryUI */
+			$jQueryUI = $this->wire()->modules->get('JqueryUI');
+			$jQueryUI->use('selectize');
+
+			// Load assets
+			$config = $this->wire()->config;
+			$info = $this->getModuleInfo();
+			$version = $info['version'];
+			$config->styles->add($config->urls->$this . "$this.css?v=$version");
+			$config->scripts->add($config->urls->$this . "SelectizeCustomChange.js?v=$version");
+			$config->scripts->add($config->urls->$this . "$this.js?v=$version");
+
+			// Hooks
+			if($allow_select) {
+				$this->addHookAfter('InputfieldSelect::renderReadyHook', $this, 'afterSelectRenderReady', [ 'priority' => 200 ]);
+			}
+			if($allow_asm_select) {
+				$this->addHookAfter('InputfieldAsmSelect::renderReadyHook', $this, 'afterAsmRenderReady', [ 'priority' => 200 ]);
+			}
+		}
+	}
+
+	/**
+	 * After InputfieldSelect::renderReadyHook
+	 *
+	 * @param HookEvent $event
+	 */
+	protected function afterSelectRenderReady(HookEvent $event) {
+		/** @var InputfieldSelect $inputfield */
+		$inputfield = $event->object;
+		// Return early if some other inputfield type is extending InputfieldSelect
+		if($inputfield->className !== 'InputfieldSelect') return;
+		// Return early if Selectize not allowed by hookable method
+		if(!$this->allowSelectize($inputfield)) return;
+		// Add class
+		if($inputfield->hasInputfield) {
+			// InputfieldPage using InputfieldSelect
+			$inputfield->hasInputfield->addClass('sa-selectize', 'wrapClass');
+		} else {
+			$inputfield->addClass('sa-selectize', 'wrapClass');
+		}
+	}
+
+	/**
+	 * After InputfieldSelect::renderReadyHook
+	 *
+	 * @param HookEvent $event
+	 */
+	protected function afterAsmRenderReady(HookEvent $event) {
+		/** @var InputfieldSelect $inputfield */
+		$inputfield = $event->object;
+		// Return early if some other inputfield type is extending InputfieldAsmSelect
+		if($inputfield->className !== 'InputfieldAsmSelect') return;
+		// Return early if Selectize not allowed by hookable method
+		if(!$this->allowSelectize($inputfield)) return;
+		// Add class
+		if($inputfield->hasInputfield) {
+			// InputfieldPage using InputfieldSelect
+			$inputfield->hasInputfield->addClass('sa-selectize', 'wrapClass');
+		} else {
+			$inputfield->addClass('sa-selectize', 'wrapClass');
+		}
+	}
+
+	/**
+	 * Allow Selectize to be used on this inputfield?
+	 *
+	 * @param Inputfield $inputfield
+	 * @return bool
+	 */
+	public function ___allowSelectize(Inputfield $inputfield) {
+		if($inputfield->hasClass('no-selectize')) return false;
+		return true;
+	}
+
+	/**
+	 * Config inputfields
+	 *
+	 * @param InputfieldWrapper $inputfields
+	 */
+	public function getModuleConfigInputfields($inputfields) {
+		$modules = $this->wire()->modules;
+
+		/** @var InputfieldCheckboxes $f */
+		$f = $modules->get('InputfieldCheckboxes');
+		$f_name = 'allowed_inputfields';
+		$f->name = $f_name;
+		$f->label = $this->_('Activate Selectize for these Inputfield types');
+		$f->addOption('select', 'InputfieldSelect');
+		$f->addOption('asm_select', 'InputfieldAsmSelect');
+		$f->value = $this->$f_name;
+		$inputfields->add($f);
+	}
+
+}

@@ -1,0 +1,179 @@
+<?php namespace ProcessWire;
+
+class Webforms extends WireData implements Module, ConfigurableModule {
+
+    public function init() {
+        $this->ensureUpgrades();
+    }
+
+    public static function getModuleInfo() {
+        return [
+            'title' => 'Webforms Settings',
+            'version' => 1,
+            'summary' => 'Configuration and storage layer for Webforms.',
+            'autoload' => true,
+            'singular' => true,
+            'icon' => 'cogs',
+            'requires' => 'ProcessWebforms',
+        ];
+    }
+
+    public static function getModuleConfigInputfields(array $data) {
+        return new InputfieldWrapper();
+    }
+
+    public function ___install() {
+        $this->installFields();
+        $this->installTemplates();
+        $this->installContainerPage();
+    }
+
+    protected function installFields() {
+        $this->createField('webform_json', 'FieldtypeTextarea', [
+            'label' => 'Webform JSON',
+            'rows' => 16,
+            'textformatters' => [],
+        ]);
+
+        $this->createField('webform_subject', 'FieldtypeText', [
+            'label' => 'Webform Subject',
+        ]);
+
+        $this->createField('webform_recipient', 'FieldtypeEmail', [
+            'label' => 'Webform Recipient',
+        ]);
+
+        $this->createField('webform_attachments', 'FieldtypeFile', [
+            'label' => 'Webform Attachments',
+            'extensions' => 'pdf doc docx xls xlsx ppt pptx txt',
+            'maxFiles' => 20,
+        ]);
+
+        $this->createField('webform_ajax', 'FieldtypeCheckbox', [
+            'label' => 'Webform Ajax',
+            'label2' => 'Enable AJAX submit (without page reload)',
+        ]);
+    }
+
+    protected function installTemplates() {
+        $titleField = $this->fields->get('title');
+        if(!$titleField) throw new WireException('Required core field "title" not found.');
+
+        $webformsTpl = $this->templates->get('webforms');
+        if(!$webformsTpl->id) {
+            $webformsTpl = new Template();
+            $webformsTpl->name = 'webforms';
+            $webformsTpl->fieldgroup = $this->getOrCreateFieldgroup('webforms');
+            $webformsTpl->noChildren = 0;
+            $webformsTpl->noParents = 1;
+            $this->templates->save($webformsTpl);
+        }
+        $this->addFieldToTemplate($webformsTpl, 'title');
+
+        $webformTpl = $this->templates->get('webform');
+        if(!$webformTpl->id) {
+            $webformTpl = new Template();
+            $webformTpl->name = 'webform';
+            $webformTpl->fieldgroup = $this->getOrCreateFieldgroup('webform');
+            $webformTpl->noChildren = 1;
+            $webformTpl->noParents = 0;
+            $this->templates->save($webformTpl);
+        }
+
+        $this->addFieldToTemplate($webformTpl, 'title');
+        $this->addFieldToTemplate($webformTpl, 'webform_json');
+        $this->addFieldToTemplate($webformTpl, 'webform_subject');
+        $this->addFieldToTemplate($webformTpl, 'webform_recipient');
+        $this->addFieldToTemplate($webformTpl, 'webform_attachments');
+        $this->addFieldToTemplate($webformTpl, 'webform_ajax');
+
+        $this->setTemplateFamily();
+    }
+
+    protected function getOrCreateFieldgroup($name) {
+        $fg = $this->fieldgroups->get($name);
+        if($fg && $fg->id) return $fg;
+        $fg = new Fieldgroup();
+        $fg->name = $name;
+        $this->fieldgroups->save($fg);
+        return $fg;
+    }
+
+    protected function setTemplateFamily() {
+        $webformsTpl = $this->templates->get('webforms');
+        $webformTpl = $this->templates->get('webform');
+        if(!$webformsTpl->id || !$webformTpl->id) return;
+
+        $childTemplates = (array) $webformsTpl->childTemplates;
+        if(!in_array((int) $webformTpl->id, $childTemplates, true)) {
+            $childTemplates[] = (int) $webformTpl->id;
+            $webformsTpl->childTemplates = $childTemplates;
+            $this->templates->save($webformsTpl);
+        }
+
+        $parentTemplates = (array) $webformTpl->parentTemplates;
+        if(!in_array((int) $webformsTpl->id, $parentTemplates, true)) {
+            $parentTemplates[] = (int) $webformsTpl->id;
+            $webformTpl->parentTemplates = $parentTemplates;
+            $this->templates->save($webformTpl);
+        }
+    }
+
+    protected function installContainerPage() {
+        $existing = $this->getContainerPage();
+        if($existing && $existing->id) return;
+
+        $home = $this->pages->get(1);
+        $template = $this->templates->get('webforms');
+        if(!$home->id || !$template->id) return;
+
+        $page = new Page();
+        $page->template = $template;
+        $page->parent = $home;
+        $page->name = 'webforms';
+        $page->title = 'Webforms';
+        $page->status = Page::statusHidden;
+        $page->save();
+    }
+
+    protected function getContainerPage() {
+        return $this->pages->get('template=webforms, include=all, sort=created');
+    }
+
+    protected function createField($name, $typeName, array $settings = []) {
+        $field = $this->fields->get($name);
+        if($field->id) return $field;
+        $type = $this->modules->get($typeName);
+        if(!$type) throw new WireException("Fieldtype {$typeName} not found for {$name}.");
+
+        $field = new Field();
+        $field->name = $name;
+        $field->type = $type;
+        foreach($settings as $key => $value) $field->set($key, $value);
+        $this->fields->save($field);
+        return $field;
+    }
+
+    protected function ensureUpgrades() {
+        $this->createField('webform_ajax', 'FieldtypeCheckbox', [
+            'label' => 'Webform Ajax',
+            'label2' => 'Enable AJAX submit (without page reload)',
+        ]);
+
+        $webformTpl = $this->templates->get('webform');
+        if($webformTpl && $webformTpl->id) {
+            $this->addFieldToTemplate($webformTpl, 'webform_ajax');
+        }
+    }
+
+    protected function addFieldToTemplate(Template $template, $fieldName) {
+        $field = $this->fields->get($fieldName);
+        if(!$field->id) throw new WireException("Field {$fieldName} not found.");
+        if(!$template->fieldgroup) $template = $this->templates->get($template->name);
+
+        if(!$template->fieldgroup->hasField($field)) {
+            $template->fieldgroup->add($field);
+            $this->fieldgroups->save($template->fieldgroup);
+        }
+    }
+}

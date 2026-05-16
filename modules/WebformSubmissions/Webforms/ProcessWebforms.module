@@ -1,0 +1,289 @@
+<?php namespace ProcessWire;
+
+class ProcessWebforms extends Process implements Module {
+
+    public static function getModuleInfo() {
+        return [
+            'title' => 'Webforms',
+            'version' => 1,
+            'summary' => 'Manage multiple webforms from admin.',
+            'autoload' => true,
+            'icon' => 'wpforms',
+            'installs' => ['Webforms', 'WebformBuilder', 'WebformSubmissions'],
+            'page' => [
+                'name' => 'webforms',
+                'parent' => 'admin',
+                'title' => 'Webforms',
+            ],
+            'permission' => 'webforms',
+            'permissions' => [
+                'webforms' => 'Access Webforms module',
+            ],
+        ];
+    }
+
+    public function ___execute() {
+        $out = '<h2>Webforms</h2>';
+        $container = $this->getContainerPage();
+        $this->includeDataTables();
+
+        if(!$container || !$container->id) {
+            return $out . '<p>Container page not found. Install/reinstall Webforms Settings module.</p>';
+        }
+
+        $webformTpl = $this->templates->get('webform');
+        $addUrl = $this->config->urls->admin . 'page/add/?parent_id=' . (int) $container->id . '&template_id=' . (int) $webformTpl->id;
+        $out .= '<div class="uk-flex uk-flex-right uk-margin-small-bottom"><a class="uk-button uk-button-primary uk-button-small" href="' . $addUrl . '"><i class="fa fa-plus-circle" aria-hidden="true"></i> Create webform</a></div>';
+
+        $forms = $container->children('template=webform, sort=title');
+        if(!count($forms)) return $out . '<p>No webforms created yet.</p>';
+
+        $out .= '<table id="webformsTable" class="AdminDataTable uk-table uk-table-divider uk-table-small"><thead><tr><th>Title</th><th>Subject</th><th>Recipient</th><th></th></tr></thead><tbody>';
+        foreach($forms as $form) {
+            $editUrl = $this->config->urls->admin . 'page/edit/?id=' . (int) $form->id;
+            $fieldsUrl = $this->page->url . 'fields/?id=' . (int) $form->id;
+            $submissionsUrl = $this->page->url . 'submissions/?id=' . (int) $form->id;
+            $previewUrl = $form->url;
+            $out .= '<tr>'
+                . '<td>' . $this->sanitizer->entities($form->title) . '</td>'
+                . '<td>' . $this->sanitizer->entities((string) $form->webform_subject) . '</td>'
+                . '<td>' . $this->sanitizer->entities((string) $form->webform_recipient) . '</td>'
+                . '<td class="uk-text-right">'
+                . '<a class="uk-button uk-button-default uk-button-small" href="' . $editUrl . '">Edit</a> '
+                . '<a class="uk-button uk-button-default uk-button-small" href="' . $this->sanitizer->entities($previewUrl) . '" target="_blank">Preview</a> '
+                . '<a class="uk-button uk-button-secondary uk-button-small" href="' . $fieldsUrl . '">Campos</a>'
+                . ' <a class="uk-button uk-button-primary uk-button-small" href="' . $submissionsUrl . '">Envios</a>'
+                . '</td>'
+                . '</tr>';
+        }
+        $out .= '</tbody></table>';
+        $out .= '<script>(function($){$(function(){if(!$.fn.dataTable) return;$("#webformsTable").DataTable({pageLength:25,order:[[0,"asc"]],columnDefs:[{orderable:false,targets:[3]}],language:{search:"Buscar:",lengthMenu:"Mostrar _MENU_",info:"Mostrando _START_ a _END_ de _TOTAL_",paginate:{first:"Primero",last:"Ultimo",next:"Siguiente",previous:"Anterior"}}});});})(jQuery);</script>';
+
+        return $out;
+    }
+
+    public function ___executeFields() {
+        $id = (int) $this->input->get('id');
+        $formPage = $this->pages->get($id);
+        if(!$formPage->id || $formPage->template != 'webform') {
+            return '<p>Webform not found.</p>';
+        }
+
+        if($this->input->post('save_fields')) {
+            $json = (string) $this->input->post('settings');
+            $decoded = json_decode($json, true);
+            if(!is_array($decoded)) {
+                $this->error('Invalid JSON data for webform fields.');
+            } else {
+                $formPage->of(false);
+                $formPage->webform_json = $json;
+                $formPage->save('webform_json');
+                $this->message('Webform fields saved.');
+            }
+        }
+
+        $builder = $this->modules->get('WebformBuilder');
+        if(!$builder) return '<p>WebformBuilder module not available.</p>';
+        $backUrl = $this->page->url;
+        $html = $builder->renderBuilderEditor($formPage, $backUrl);
+        $html = str_replace(
+            '<p><a href="' . $this->sanitizer->entities($backUrl) . '">Back to Webforms</a></p>',
+            '<div class="uk-flex uk-flex-right uk-margin-small-bottom"><a class="uk-button uk-button-default uk-button-small" href="' . $this->sanitizer->entities($backUrl) . '"><i class="fa fa-arrow-left" aria-hidden="true"></i> Back to Webforms</a></div>',
+            $html
+        );
+        return $html;
+    }
+
+    public function ___executeSubmissions() {
+        $id = (int) $this->input->get('id');
+        $formPage = $this->pages->get($id);
+        if(!$formPage->id || $formPage->template != 'webform') {
+            return '<p>Webform not found.</p>';
+        }
+
+        $submissionsModule = $this->modules->get('WebformSubmissions');
+        if(!$submissionsModule) return '<p>WebformSubmissions module not available.</p>';
+
+        if($this->input->post('delete_all_submissions') || $this->input->post('delete_selected_submissions') || $this->input->post('delete_submission_id')) {
+            if(!$this->session->CSRF->hasValidToken()) {
+                $this->error('Invalid CSRF token.');
+            } else {
+                if($this->input->post('delete_all_submissions')) {
+                    $deleted = $submissionsModule->deleteAllSubmissionsByWebform($formPage->id);
+                    $this->message($deleted > 0 ? "{$deleted} envios eliminados." : 'No habia envios para eliminar.');
+                } elseif($this->input->post('delete_selected_submissions')) {
+                    $selected = $this->input->post('submission_ids');
+                    if(!is_array($selected)) $selected = [];
+                    $deleted = $submissionsModule->deleteSubmissionsByIds($formPage->id, $selected);
+                    $this->message($deleted > 0 ? "{$deleted} envios seleccionados eliminados." : 'No se eliminaron envios.');
+                } else {
+                    $singleId = (int) $this->input->post('delete_submission_id');
+                    $ok = $submissionsModule->deleteSubmissionById($formPage->id, $singleId);
+                    $this->message($ok ? 'Envio eliminado.' : 'No se pudo eliminar el envio.');
+                }
+            }
+        }
+
+        $rows = $submissionsModule->getSubmissionsByWebform($formPage->id, 500);
+        $out = '<h2>Envios: ' . $this->sanitizer->entities($formPage->title) . '</h2>';
+        $out .= '<div class="uk-flex uk-flex-right uk-margin-small-bottom"><a class="uk-button uk-button-default uk-button-small" href="' . $this->page->url . '"><i class="fa fa-arrow-left" aria-hidden="true"></i> Back to Webforms</a></div>';
+
+        if(!count($rows)) return $out . '<p>No submissions yet.</p>';
+
+        $out .= '<form method="post" id="webformSubmissionsForm">' . $this->session->CSRF->renderInput();
+        $out .= '<div class="uk-flex uk-flex-between uk-flex-middle uk-margin-small-bottom">'
+            . '<div>'
+            . '<button type="submit" name="delete_selected_submissions" value="1" class="uk-button uk-button-danger uk-button-small" onclick="return confirm(\'Eliminar envios seleccionados?\');">Eliminar seleccionados</button> '
+            . '<button type="submit" name="delete_all_submissions" value="1" class="uk-button uk-button-danger uk-button-small" onclick="return confirm(\'Eliminar TODOS los envios de este formulario?\');">Eliminar todos</button>'
+            . '</div>'
+            . '</div>';
+
+        $out .= '<table id="webformSubmissionsTable" class="AdminDataTable uk-table uk-table-divider uk-table-small"><thead><tr><th style="width:30px;"><input type="checkbox" id="selectAllSubmissions" class="submission-check"></th><th>ID</th><th>Created</th><th>IP</th><th class="uk-text-right">Actions</th></tr></thead><tbody>';
+        $modalBlocks = '';
+        $fieldMap = $this->buildWebformFieldMap($formPage);
+        foreach($rows as $row) {
+            $payload = json_decode((string) $row['payload_json'], true);
+            if(!is_array($payload)) $payload = [];
+            $payloadHtml = $this->renderSubmissionPayloadHtml((int) $formPage->id, $payload, $fieldMap);
+            $modalId = 'submission-detail-' . (int) $row['id'];
+            $modalBlocks .= '<div id="' . $modalId . '" class="mfp-hide uk-padding-small" style="max-width:760px;background:#fff;">'
+                . '<h3 class="uk-margin-small-bottom">Submission #' . (int) $row['id'] . '</h3>'
+                . '<p class="uk-text-meta uk-margin-small-top">' . $this->sanitizer->entities((string) $row['created_at']) . ' | IP: ' . $this->sanitizer->entities((string) $row['ip']) . '</p>'
+                . $payloadHtml
+                . '</div>';
+            $out .= '<tr>'
+                . '<td><input type="checkbox" class="submission-check" name="submission_ids[]" value="' . (int) $row['id'] . '"></td>'
+                . '<td>' . (int) $row['id'] . '</td>'
+                . '<td>' . $this->sanitizer->entities((string) $row['created_at']) . '</td>'
+                . '<td>' . $this->sanitizer->entities((string) $row['ip']) . '</td>'
+                . '<td class="uk-text-right">'
+                . '<a class="uk-button uk-button-default uk-button-small js-submission-detail" href="#' . $modalId . '">View</a> '
+                . '<button type="submit" name="delete_submission_id" value="' . (int) $row['id'] . '" class="uk-button uk-button-danger uk-button-small" onclick="return confirm(\'Eliminar este envio?\');">Delete</button>'
+                . '</td>'
+                . '</tr>';
+        }
+        $out .= '</tbody></table>';
+        $out .= '</form>';
+        $out .= $modalBlocks;
+        $out .= '<style>.mfp-wrap.pgs-mfp-center{display:flex;align-items:center;justify-content:center;}.mfp-wrap.pgs-mfp-center .mfp-content{width:92%;max-width:760px;}.mfp-wrap.pgs-mfp-center .mfp-inline-holder .mfp-content,.mfp-wrap.pgs-mfp-center .mfp-ajax-holder .mfp-content{width:92%;max-width:760px;}#webformSubmissionsForm .submission-check{-webkit-appearance:checkbox;appearance:checkbox;width:16px;height:16px;min-width:16px;min-height:16px;border-radius:2px;vertical-align:middle;}#webformSubmissionsForm td:first-child,#webformSubmissionsForm th:first-child{text-align:center;}</style>';
+        $this->includeDataTables();
+        $out .= '<script>(function($){$(function(){if($.fn.dataTable){$("#webformSubmissionsTable").DataTable({pageLength:25,order:[[1,"desc"]],columnDefs:[{orderable:false,targets:[0,4]}],language:{search:"Buscar:",lengthMenu:"Mostrar _MENU_",info:"Mostrando _START_ a _END_ de _TOTAL_",paginate:{first:"Primero",last:"Ultimo",next:"Siguiente",previous:"Anterior"}}});}$("#selectAllSubmissions").on("change",function(){var checked=$(this).is(":checked");$(".submission-check").prop("checked",checked);});$(document).on("change",".submission-check",function(){if(!$(this).is(":checked")){$("#selectAllSubmissions").prop("checked",false);}});});})(jQuery);</script>';
+
+        $magnific = $this->modules->get('JqueryMagnificPressets');
+        if($magnific && method_exists($magnific, 'renderInitScript')) {
+            $out .= $magnific->renderInitScript('.js-submission-detail', 'inline', ['midClick' => true, 'mainClass' => 'pgs-mfp-center']);
+        }
+
+        return $out;
+    }
+
+    protected function getContainerPage() {
+        return $this->pages->get('template=webforms, include=all, sort=created');
+    }
+
+    protected function includeDataTables() {
+        $dt = $this->modules->get('JqueryDataTables');
+        if(!$dt) {
+            $this->warning('JqueryDataTables module is not available.');
+        }
+    }
+
+    protected function renderSubmissionPayloadHtml($webformId, array $payload, array $fieldMap = []) {
+        $baseUrl = $this->config->urls->assets . 'files/webform-submissions/' . (int) $webformId . '/';
+        $basePath = $this->config->paths->assets . 'files/webform-submissions/' . (int) $webformId . '/';
+        $html = '<div class="uk-text-small">';
+
+        foreach($payload as $key => $value) {
+            $field = isset($fieldMap[$key]) ? $fieldMap[$key] : null;
+            $label = $field && isset($field['label']) && trim((string) $field['label']) !== ''
+                ? (string) $field['label']
+                : $this->humanizeApiKey((string) $key);
+            $safeLabel = $this->sanitizer->entities($label);
+            $html .= '<div class="uk-margin-small-bottom"><strong>' . $safeLabel . ':</strong> ';
+
+            if(is_array($value)) {
+                $parts = [];
+                foreach($value as $v) {
+                    $parts[] = $this->sanitizer->entities($this->resolveOptionLabel($field, (string) $v));
+                }
+                $html .= implode(', ', $parts);
+            } else {
+                $str = (string) $value;
+                $displayValue = $this->resolveOptionLabel($field, $str);
+                $safe = $this->sanitizer->entities($displayValue);
+                $file = $this->sanitizer->filename($str);
+                $full = $basePath . $file;
+                if($file !== '' && is_file($full)) {
+                    $fileUrl = $baseUrl . rawurlencode($file);
+                    $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+                    $html .= '<a href="' . $fileUrl . '" target="_blank">' . $safe . '</a>';
+                    if(in_array($ext, ['jpg','jpeg','png','webp','gif','svg'], true)) {
+                        $html .= '<div class="uk-margin-small-top"><a href="' . $fileUrl . '" target="_blank"><img src="' . $fileUrl . '" alt="" style="max-width:140px;height:auto;"></a></div>';
+                    }
+                } else {
+                    $html .= $safe;
+                }
+            }
+
+            $html .= '</div>';
+        }
+
+        $html .= '</div>';
+        return $html;
+    }
+
+    protected function buildWebformFieldMap(Page $formPage) {
+        $json = (string) $formPage->webform_json;
+        $arr = json_decode($json, true);
+        if(!is_array($arr)) return [];
+
+        $map = [];
+        foreach($arr as $field) {
+            if(!is_array($field) || empty($field['api'])) continue;
+            $api = $this->sanitizer->name((string) $field['api']);
+            if($api === '') continue;
+            $map[$api] = $field;
+        }
+        return $map;
+    }
+
+    protected function resolveOptionLabel($field, $value) {
+        if(!is_array($field)) return $value;
+        if(!isset($field['type'])) return $value;
+        $type = (string) $field['type'];
+        if($type !== 'Select' && $type !== 'Radios' && $type !== 'Checkboxes') return $value;
+
+        $select = isset($field['select']) ? (string) $field['select'] : '';
+        if($select === '') return $value;
+
+        $tokens = explode(',', trim($select, ','));
+        foreach($tokens as $token) {
+            $token = trim($token);
+            if($token === '') continue;
+
+            $optValue = '';
+            $optLabel = '';
+            if(strpos($token, ':') !== false) {
+                list($rawValue, $rawLabel) = explode(':', $token, 2);
+                $optValue = $this->sanitizer->name($rawValue);
+                $optLabel = rawurldecode(trim($rawLabel));
+            } else {
+                $optValue = $this->sanitizer->name($token);
+                $optLabel = rawurldecode($token);
+            }
+            if($optValue === '') continue;
+            if((string) $optValue === (string) $value) {
+                return $optLabel !== '' ? $optLabel : $optValue;
+            }
+        }
+
+        return $value;
+    }
+
+    protected function humanizeApiKey($key) {
+        $key = str_replace(['_', '-'], ' ', (string) $key);
+        $key = trim(preg_replace('/\s+/', ' ', $key));
+        if($key === '') return '';
+        return ucfirst($key);
+    }
+}

@@ -1,0 +1,144 @@
+<?php
+
+/**
+ * JS module for Selectize.js
+ * http://selectize.github.io/selectize.js/
+ */
+
+class JquerySelectize extends \ProcessWire\ModuleJS implements \ProcessWire\ConfigurableModule {
+
+    public static function getModuleInfo() {
+        return array(
+                'title' => 'Selectize.js Plugin',
+                'version' => 105,
+                'summary' => 'Provides Selectize.js for use in ProcessWire.',
+                'href' => 'http://selectize.github.io/selectize.js/',
+                );
+        }
+
+
+
+    protected static $configDefaults = array(
+        'skins'  => ['none','default','bootstrap2','bootstrap3','legacy'],
+        'forceLoad'  => 0, // force load library from module, even for PW v+=3.0.67
+    );
+
+
+    /**
+     * Data as used by the get/set functions
+     *
+     */
+    protected $data = array();
+
+
+    /**
+     * __construct() is the right place to init config vars before they'll get populated
+     *
+     */
+    public function __construct() {
+        //$this->configData = $this->modules->getModuleConfigData($this);
+        //$this->skins = ['none','default','bootstrap2','bootstrap3','legacy'];
+        foreach(self::$configDefaults as $key => $value) {
+            $this->set($key, $value); 
+        }
+    }
+
+
+    /**
+     * Per the Module interface, Initialize the Process, loading any related CSS or JS files
+     *
+     */
+    public function init() {
+        parent::init();
+
+        $name = $this->classname();
+        $info = $this->getModuleInfo();
+        $version = (int) $info['version'];
+
+        $loadFrom = $this->forceLoad ? 'mod' : 'core';
+        if(version_compare($this->config->version, '3.0.67', '<')) {
+            $loadFrom = 'mod';
+        }
+
+        if($loadFrom == 'core') {
+            $this->wire('modules')->get('JqueryUI')->use('selectize');
+        } else {
+            $this->config->styles->add($this->config->urls->$name . "selectize/dist/css/selectize.css?v=$version");
+
+            $min = $this->config->debug ? '' : '.min';
+            $this->config->scripts->add($this->config->urls->$name . "selectize/dist/js/standalone/selectize{$min}.js?v=$version");
+        }
+
+
+        if(isset($this->skin) && $this->skin > 0) {
+            $i = $this->skin;
+            if($loadFrom == 'core') {
+                $coreSkin = $this->config->urls->modules . 'Jquery/JqueryUI/selectize/css/selectize.' .  $this->skins[$i] . ".css?v=$version";
+                $this->config->styles->add($coreSkin);
+            } else {
+                $modSkin = $this->config->urls->$name . "selectize/dist/css/selectize." . $this->skins[$i] .  ".css?v=$version";
+                $this->config->styles->add($modSkin);
+            }
+        }
+
+        if($this->forceLoad) {
+            $this->addHookBefore("JqueryUI::use", $this, "hookJqueryUIuse_preventLoad");
+        }
+
+    }
+
+
+    public function hookJqueryUIuse_preventLoad(\ProcessWire\HookEvent $event) {
+
+        $name = $event->arguments[0];
+        $object = $event->object;
+        if($name == 'selectize') {
+            $event->replace = true;
+            $event->return = false;
+        }
+    }
+
+
+    /**
+     * Return an InputfieldsWrapper of Inputfields used to configure the class
+     *
+     * @param array $data Array of config values indexed by field name
+     * @return InputfieldsWrapper
+     *
+     */
+    public function getModuleConfigInputfields(array $data) {
+
+        $wrapper = new \ProcessWire\InputfieldWrapper();
+        $options = $this->skins;
+
+        $field = \ProcessWire\wire('modules')->get("InputfieldSelect");
+        $field->attr('name', 'skin');
+        $field->label = "Choose skin";
+        $field->attr('value', (isset($data['skin']) ? $data['skin'] : 0));
+        $field->addOptions($options);
+        $wrapper->add($field);
+
+        if(version_compare($this->config->version, '3.0.66', '>')) {
+
+            $field = \ProcessWire\wire('modules')->get("InputfieldCheckbox");
+            $field->attr('name', 'forceLoad');
+            $field->label = "Force load module version of Selectize";
+            $field->attr('value', 1); 
+            if($data['forceLoad']) $field->attr('checked', 'checked'); 
+            $field->description = \ProcessWire\__('Check this box to force loading of module css & js.');
+            $field->notes = \ProcessWire\__('This is primarily for testing, in case you run into any problems with the core version.'); 
+
+            $wrapper->add($field);
+
+        }
+
+
+        return $wrapper;
+
+
+    }
+
+
+
+}
+

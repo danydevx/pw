@@ -1,0 +1,114 @@
+<?php
+
+/**
+ * Inputfield 'select file' provides a HTML select to select a file or a folder
+ * from disk. Per Inputfield you can set a folder to list from.
+ *
+ * ©2019 Martijn Geerts
+ *
+ * ProcessWire 3.x
+ * Copyright (C) 2010 by Ryan Cramer
+ * Licensed under GNU/GPL v2, see LICENSE.TXT
+ *
+ * http://www.processwire.com
+ * http://www.ryancramer.com
+ *
+ */
+
+class InputfieldSelectFile extends InputfieldText {
+
+	/**
+	 * Return an array of module information
+	 *
+	 * @return array
+	 */
+	public static function getModuleInfo() {
+		return array(
+			'title' => 'Select File',
+			'version' => 105,
+			'summary' => __('Inputfield to select a file or a folder.'),
+			'author' => 'Martijn Geerts',
+			'href' => 'https://processwire.com/talk/topic/6377-fieldtypeselectfile-inputfieldselectfile/',
+			'requires' => array(
+				'FieldtypeSelectFile',
+			),
+		);
+	}
+
+	/**
+	 * Return the completed output of Inputfield select file
+	 *
+	 * @return string
+	 *
+	 */
+	public function ___render() {
+
+		$array = array();
+		$folder = $this->config->paths->templates . trim(trim($this->folderPath), '/') . "/";
+		$phpFileDescription = false;
+
+		if(!is_dir($folder)) {
+			$this->error($this->_("Path to files is invalid"));
+		} else {
+			$array[] = "<option value=''></option>";
+			$handle = opendir($folder);
+			while (false !== ($entry = readdir($handle))) {
+
+				if (strpos($entry, '.') === 0) continue;
+				if (is_file($folder . $entry) && $this->hideFiles) continue;
+				if (is_dir($folder . $entry) && $this->hideFolders) continue;
+				if (is_dir($folder . $entry) && $this->template) continue;
+				if (is_file($folder . $entry) && $this->fileExt) {
+					$exploded = explode('.', $entry);
+					array_pop($exploded);
+					$label = implode('.', $exploded);
+				} else {
+					$label = $entry;
+				}
+				// pull "Description" comment from php files if it exists (inspired by WordPress "Template Name" comment)
+				if(!$this->fileDesc && pathinfo($entry)['extension'] === 'php') {
+					$phpFileData = implode('', file($folder . $entry));
+					if (preg_match('|Description:(.*)$|mi', $phpFileData, $desc)) {
+						$phpFileDescription = trim(preg_replace('/\s*(?:\*\/|\?>).*/', '', $desc[1]));
+						$label .= " (" . $phpFileDescription . ")";
+					}
+				}
+
+				$selected = $entry == $this->value ? " selected" : '';
+				$array[] = "<option value='" . $entry . "'" . $selected . ">" . $label . "</option>";
+			}
+			closedir($handle);
+		}
+
+		if ($this->sort) natcasesort($array);
+
+		return "<select name='" . $this->name . "'>" . implode('', $array) . "</select>";
+	}
+
+	/**
+	 * Get any custom configuration fields for Inputfield select file
+	 *
+	 * @return InputfieldWrapper
+	 *
+	 */
+	public function ___getConfigInputfields() {
+		$inputfields = parent::___getConfigInputfields();
+
+		$f = $inputfields->get('stripTags');
+		if($f) $inputfields->remove($f);
+
+		$f = $inputfields->get('size');
+		if($f) $inputfields->remove($f);
+
+		$f = $inputfields->get('maxlength');
+		if($f) $inputfields->remove($f);
+
+		$f = $inputfields->get('placeholder');
+		if($f) $inputfields->remove($f);
+
+		$f = $inputfields->get('pattern');
+		if($f) $inputfields->remove($f);
+
+		return $inputfields;
+	}
+}

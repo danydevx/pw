@@ -1,0 +1,529 @@
+<?php namespace ProcessWire;
+
+class WebformBuilder extends WireData implements Module {
+
+    public function init() {
+        $this->handleAjaxEndpointRequest();
+    }
+
+    public static function getModuleInfo() {
+        return [
+            'title' => 'WebformBuilder',
+            'version' => 1,
+            'summary' => 'Builder and frontend renderer for Webforms JSON.',
+            'autoload' => true,
+            'singular' => true,
+        ];
+    }
+
+    public function includeBuilderAssets() {
+        $base = $this->config->urls->siteModules . 'WebformBuilder/';
+        $this->config->styles->add($base . 'Builder.css');
+        $this->config->scripts->add($base . 'Builder.js');
+    }
+
+    public function includeFrontendAssets() {
+        $base = $this->config->urls->siteModules . 'WebformBuilder/';
+        $this->config->styles->add($base . 'Frontend.css');
+        $this->config->scripts->add($base . 'FrontendForms.js');
+    }
+
+    public function renderBuilderEditor(Page $formPage, $backUrl) {
+        $this->includeBuilderAssets();
+
+        $json = (string) $formPage->webform_json;
+        if(trim($json) === '') {
+            $json = '{"0":{"api":"name","label":"Name","type":"Text","width":"100","description":"","select":"","collapsed":"Default","required":"1","placeholder":""}}';
+        }
+
+        $rows = $this->buildRowsFromJson($json);
+        $out = '<h2>Campos: ' . $this->sanitizer->entities($formPage->title) . '</h2>';
+        $out .= '<p><a href="' . $this->sanitizer->entities($backUrl) . '">Back to Webforms</a></p>';
+        $out .= '<form id="ModuleEditForm" method="post">';
+        $out .= '<input type="hidden" name="save_fields" value="1">';
+        $out .= '<textarea name="settings" id="settings" style="display:none;">' . $this->sanitizer->entities($json) . '</textarea>';
+        $out .= '<div id="pgsSettingsTableWrap">'
+            . '<table id="pgsSettingsTable" class="uk-table uk-table-divider uk-table-small">'
+            . '<thead><tr><th></th><th>Label</th><th>API</th><th>Type</th><th>Width</th><th>Required</th><th class="pgs-actions">Actions</th></tr></thead>'
+            . '<tbody>' . $rows . '</tbody>'
+            . '</table>'
+            . '<a id="addNew" href="#" class="uk-button uk-button-primary uk-button-small"><i class="fa fa-plus-circle" aria-hidden="true"></i> Add field</a>'
+            . '</div>';
+        $out .= '<div class="uk-margin-small-top"><button type="submit" class="uk-button uk-button-primary uk-button-small">Save fields</button></div>';
+        $out .= '</form>';
+        return $out;
+    }
+
+    public function renderFrontendForm(Page $formPage) {
+        $this->includeFrontendAssets();
+
+        $json = (string) $formPage->webform_json;
+        $attrs = json_decode($json, true);
+        if(!is_array($attrs)) return '';
+
+        $isAjaxEnabled = !empty($formPage->webform_ajax);
+        $formId = 'webform-' . (int) $formPage->id;
+        $actionAttr = '';
+        if($isAjaxEnabled) {
+            $actionAttr = ' action="' . $this->sanitizer->entities((string) $formPage->url) . '"';
+        }
+
+        $out = '<form id="' . $formId . '" class="webform-form webform-form-' . (int) $formPage->id . '" method="post" enctype="multipart/form-data"' . $actionAttr . ' data-webform-id="' . (int) $formPage->id . '" data-webform-ajax="' . ($isAjaxEnabled ? '1' : '0') . '">';
+        $out .= $this->wire('session')->CSRF->renderInput();
+        $out .= '<input type="hidden" name="webform_id" value="' . (int) $formPage->id . '">';
+        $out .= '<div class="webform-field-group field-100" style="--wf-width:100;"><p class="webform-feedback" style="display:none;"></p></div>';
+        $out .= '<div style="position:absolute;left:-9999px;top:-9999px;opacity:0;pointer-events:none;" aria-hidden="true">'
+            . '<label for="company_website">No completar</label>'
+            . '<input type="text" id="company_website" name="company_website" value="" tabindex="-1" autocomplete="off">'
+            . '</div>';
+        foreach($attrs as $fset) {
+            if(!isset($fset['type']) || !isset($fset['api'])) continue;
+            $name = $this->sanitizer->name($fset['api']);
+            $label = $this->sanitizer->entities($fset['label'] ?? $name);
+            $required = !empty($fset['required']) ? ' required' : '';
+            $requiredClass = !empty($fset['required']) ? ' is-required' : ' is-optional';
+            $type = $fset['type'];
+            $placeholder = $this->sanitizer->entities((string) ($fset['placeholder'] ?? ''));
+            $description = trim((string) ($fset['description'] ?? ''));
+            $descriptionHtml = $description !== ''
+                ? '<small class="webform-description">' . $this->sanitizer->entities($description) . '</small>'
+                : '';
+            $fieldHelpHtml = '';
+            $width = isset($fset['width']) ? (int) $fset['width'] : 100;
+            if($width < 10) $width = 10;
+            if($width > 100) $width = 100;
+            $groupClass = 'webform-field-group field-' . $width . $requiredClass . ' type-' . strtolower($this->sanitizer->name($type)) . ' api-' . strtolower($name);
+            $groupStyle = 'style="--wf-width:' . $width . ';"';
+
+            if($type === 'Fieldset') {
+                $out .= '<fieldset class="webform-fieldset" style="--wf-width:100;"><legend>' . $label . '</legend>' . $descriptionHtml;
+                continue;
+            }
+            if($type === 'FieldsetClose') {
+                $out .= '</fieldset>';
+                continue;
+            }
+
+            $out .= '<div class="mb-3 ' . $groupClass . '" ' . $groupStyle . '>';
+            if($type !== 'Checkbox') $out .= '<label class="form-label webform-label" for="' . $name . '">' . $label . '</label>';
+
+            if($type === 'Textarea') {
+                $out .= '<textarea class="form-control webform-control" id="' . $name . '" name="' . $name . '" placeholder="' . $placeholder . '"' . $required . '></textarea>';
+            } elseif($type === 'Email') {
+                $out .= '<input class="form-control webform-control" type="email" id="' . $name . '" name="' . $name . '" placeholder="' . $placeholder . '"' . $required . '>';
+            } elseif($type === 'Date') {
+                $dateMin = isset($fset['date_min']) ? (string) $fset['date_min'] : '';
+                $dateMax = isset($fset['date_max']) ? (string) $fset['date_max'] : '';
+                $minAttr = preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateMin) ? ' min="' . $this->sanitizer->entities($dateMin) . '"' : '';
+                $maxAttr = preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateMax) ? ' max="' . $this->sanitizer->entities($dateMax) . '"' : '';
+                $out .= '<input class="form-control webform-control" type="date" id="' . $name . '" name="' . $name . '" placeholder="' . $placeholder . '"' . $minAttr . $maxAttr . $required . '>';
+                if($dateMin !== '' && $dateMax !== '') {
+                    $fieldHelpHtml = '<small class="webform-description">Rango permitido: ' . $this->sanitizer->entities($dateMin) . ' a ' . $this->sanitizer->entities($dateMax) . '.</small>';
+                } elseif($dateMin !== '') {
+                    $fieldHelpHtml = '<small class="webform-description">Fecha minima: ' . $this->sanitizer->entities($dateMin) . '.</small>';
+                } elseif($dateMax !== '') {
+                    $fieldHelpHtml = '<small class="webform-description">Fecha maxima: ' . $this->sanitizer->entities($dateMax) . '.</small>';
+                }
+            } elseif($type === 'URL') {
+                $out .= '<input class="form-control webform-control" type="url" id="' . $name . '" name="' . $name . '" placeholder="' . $placeholder . '"' . $required . '>';
+            } elseif($type === 'Integer') {
+                $out .= '<input class="form-control webform-control" type="number" step="1" id="' . $name . '" name="' . $name . '" placeholder="' . $placeholder . '"' . $required . '>';
+            } elseif($type === 'Float') {
+                $out .= '<input class="form-control webform-control" type="number" step="any" id="' . $name . '" name="' . $name . '" placeholder="' . $placeholder . '"' . $required . '>';
+            } elseif($type === 'Checkbox') {
+                $out .= '<div class="form-check webform-check"><label class="form-check-label webform-check-label"><input class="form-check-input webform-check-input" type="checkbox" id="' . $name . '" name="' . $name . '" value="1"' . $required . '> ' . $label . '</label></div>';
+            } elseif($type === 'Select') {
+                $out .= '<select class="form-select webform-select" id="' . $name . '" name="' . $name . '"' . $required . '>' . $this->renderOptionTags($fset) . '</select>';
+            } elseif($type === 'Radios') {
+                $out .= $this->renderRadioTags($name, $fset, $required);
+            } elseif($type === 'Checkboxes') {
+                $out .= $this->renderCheckboxTags($name, $fset, $required);
+            } elseif($type === 'Image' || $type === 'File') {
+                $out .= '<input class="form-control webform-control" type="file" id="' . $name . '" name="' . $name . ($type === 'File' ? '' : '') . '"' . $required . '>';
+            } else {
+                $out .= '<input class="form-control webform-control" type="text" id="' . $name . '" name="' . $name . '" placeholder="' . $placeholder . '"' . $required . '>';
+            }
+
+            if($fieldHelpHtml !== '') $out .= $fieldHelpHtml;
+            $out .= $descriptionHtml;
+
+            $out .= '</div>';
+        }
+
+        $out .= '<div class="mb-3 webform-field-group field-100" style="--wf-width:100;"><button class="btn btn-primary webform-submit" type="submit" name="submit_webform" value="1">Enviar</button></div>';
+        $out .= '</form>';
+        $out .= $this->renderFrontendInitScript($formId, $attrs, $isAjaxEnabled);
+
+        return $out;
+    }
+
+    public function renderWebformById($webformId) {
+        $webformId = (int) $webformId;
+        if($webformId < 1) return '';
+
+        $formPage = $this->wire('pages')->get("template=webform, id={$webformId}");
+        if(!$formPage->id) return '';
+
+        $response = $this->handleSubmission($formPage);
+        if($response['is_handled'] && $response['is_ajax']) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => (bool) $response['success'],
+                'message' => (string) $response['message'],
+                'debug' => $this->wire('config')->debug ? (string) $response['debug'] : '',
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+
+        if($response['is_handled'] && !$response['is_ajax']) {
+            return '<p>' . $this->sanitizer->entities($response['message']) . '</p>' . $this->renderFrontendForm($formPage);
+        }
+
+        return $this->renderFrontendForm($formPage);
+    }
+
+    public function handleSubmission(Page $formPage) {
+        $result = [
+            'is_handled' => false,
+            'is_ajax' => false,
+            'success' => false,
+            'message' => '',
+            'debug' => '',
+        ];
+
+        $postedId = (int) $this->wire('input')->post('webform_id');
+        if($postedId !== (int) $formPage->id) return $result;
+
+        $hasSubmitFlag = (string) $this->wire('input')->post('submit_webform') !== '';
+        if(!$hasSubmitFlag && !$this->isAjaxRequest()) return $result;
+
+        $result['is_handled'] = true;
+        $result['is_ajax'] = !empty($formPage->webform_ajax) && $this->isAjaxRequest();
+
+        if(!$this->wire('session')->CSRF->hasValidToken()) {
+            $result['message'] = 'No se pudo procesar el envio (token invalido).';
+            $tokenName = $this->wire('session')->CSRF->getTokenName();
+            $postedToken = (string) $this->wire('input')->post($tokenName);
+            $result['debug'] = $postedToken !== '' ? 'csrf_invalid_mismatch' : 'csrf_missing_token';
+            return $result;
+        }
+
+        $honeypot = (string) $this->wire('input')->post('company_website');
+        if(trim($honeypot) !== '') {
+            $result['message'] = 'No se pudo procesar el envio.';
+            $result['debug'] = 'honeypot_triggered';
+            return $result;
+        }
+
+        $submissions = $this->wire('modules')->get('WebformSubmissions');
+        if(!$submissions) {
+            $result['message'] = 'No se pudo procesar el envio.';
+            $result['debug'] = 'submissions_module_missing';
+            return $result;
+        }
+
+        $payload = $this->collectSubmissionData($formPage);
+        $submissions->saveSubmission($formPage->id, $payload, [
+            'page_id' => (int) $formPage->id,
+            'page_title' => (string) $formPage->title,
+        ]);
+        $submissions->sendSubmissionNotification($formPage, $payload);
+
+        $result['success'] = true;
+        $thanksMessage = 'Gracias por su tiempo, le responderemos a la brevedad';
+        if($submissions && method_exists($submissions, 'getThankYouMessage')) {
+            $thanksMessage = (string) $submissions->getThankYouMessage();
+            if($thanksMessage === '') $thanksMessage = 'Gracias por su tiempo, le responderemos a la brevedad';
+        }
+        $result['message'] = $thanksMessage;
+        return $result;
+    }
+
+    public function collectSubmissionData(Page $formPage) {
+        $json = (string) $formPage->webform_json;
+        $attrs = json_decode($json, true);
+        if(!is_array($attrs)) return [];
+
+        $payload = [];
+        $basePath = $this->ensureSubmissionFilesPath($formPage->id);
+        foreach($attrs as $fset) {
+            if(!isset($fset['type']) || !isset($fset['api'])) continue;
+            $type = (string) $fset['type'];
+            $api = $this->sanitizer->name($fset['api']);
+            if($api === '') continue;
+
+            if($type === 'Fieldset' || $type === 'FieldsetClose' || $type === 'Markup') continue;
+
+            if($type === 'Checkboxes') {
+                $val = $this->wire('input')->post($api);
+                if(!is_array($val)) $val = [];
+                $payload[$api] = array_values(array_map([$this, 'sanitizeOptionValue'], $val));
+                continue;
+            }
+
+            if($type === 'Checkbox') {
+                $payload[$api] = $this->wire('input')->post($api) ? '1' : '0';
+                continue;
+            }
+
+            if($type === 'Image' || $type === 'File') {
+                $payload[$api] = $this->processUploadedFile($api, $fset, $basePath);
+                continue;
+            }
+
+            $raw = $this->wire('input')->post($api);
+            $sanitized = $this->sanitizeByType($type, $raw);
+            if($type === 'Date' && $sanitized !== '') {
+                $min = isset($fset['date_min']) ? (string) $fset['date_min'] : '';
+                $max = isset($fset['date_max']) ? (string) $fset['date_max'] : '';
+                if($min !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $min) && strcmp($sanitized, $min) < 0) {
+                    $sanitized = '';
+                }
+                if($max !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $max) && strcmp($sanitized, $max) > 0) {
+                    $sanitized = '';
+                }
+            }
+            $payload[$api] = $sanitized;
+        }
+
+        return $payload;
+    }
+
+    protected function sanitizeByType($type, $raw) {
+        $sanitizer = $this->wire('sanitizer');
+        $type = (string) $type;
+        $value = is_array($raw) ? '' : (string) $raw;
+
+        if($type === 'Email') return $sanitizer->email($value);
+        if($type === 'Date') {
+            if(preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) return $value;
+            return '';
+        }
+        if($type === 'URL') return $sanitizer->url($value);
+        if($type === 'Integer') return (string) $sanitizer->int($value);
+        if($type === 'Float') return (string) $sanitizer->float($value);
+        if($type === 'Textarea') return $sanitizer->textarea($value);
+        if($type === 'Select' || $type === 'Radios') return $this->sanitizeOptionValue($value);
+
+        return $sanitizer->text($value);
+    }
+
+    protected function sanitizeOptionValue($value) {
+        return $this->wire('sanitizer')->name((string) $value);
+    }
+
+    protected function ensureSubmissionFilesPath($webformId) {
+        $path = $this->config->paths->assets . 'files/webform-submissions/' . (int) $webformId . '/';
+        if(!is_dir($path)) wireMkdir($path, true);
+        return $path;
+    }
+
+    protected function processUploadedFile($api, array $fieldConfig, $basePath) {
+        if(!isset($_FILES[$api]) || !is_array($_FILES[$api]) || empty($_FILES[$api]['name'])) return '';
+
+        $type = isset($fieldConfig['type']) ? (string) $fieldConfig['type'] : 'File';
+        $upload = new WireUpload($api);
+        $upload->setDestinationPath($basePath);
+        $upload->setMaxFiles(1);
+        $upload->setOverwrite(false);
+
+        if($type === 'Image') {
+            $ext = isset($fieldConfig['image_extensions']) ? $fieldConfig['image_extensions'] : 'jpg,jpeg,png,webp,gif,svg';
+            $maxKb = isset($fieldConfig['image_max_size']) ? (int) $fieldConfig['image_max_size'] : 1024;
+            if($maxKb < 1) $maxKb = 1024;
+            $upload->setValidExtensions($this->sanitizeCsvExtensions($ext, ['jpg','jpeg','png','webp','gif','svg']));
+            $upload->setMaxFileSize($maxKb * 1024);
+        } else {
+            $ext = isset($fieldConfig['file_extensions']) ? $fieldConfig['file_extensions'] : 'pdf,doc,docx,xls,xlsx,ppt,pptx,txt';
+            $maxKb = isset($fieldConfig['file_max_size']) ? (int) $fieldConfig['file_max_size'] : 2048;
+            if($maxKb < 1) $maxKb = 2048;
+            $upload->setValidExtensions($this->sanitizeCsvExtensions($ext));
+            $upload->setMaxFileSize($maxKb * 1024);
+        }
+
+        $uploaded = $upload->execute();
+        if(!count($uploaded)) return '';
+
+        return $this->sanitizer->filename($uploaded[0]);
+    }
+
+    protected function sanitizeCsvExtensions($raw, array $fallback = []) {
+        $parts = explode(',', strtolower((string) $raw));
+        $out = [];
+        foreach($parts as $p) {
+            $p = preg_replace('/[^a-z0-9]/', '', trim($p));
+            if($p !== '') $out[] = $p;
+        }
+        $out = array_values(array_unique($out));
+        if(!count($out)) {
+            $out = count($fallback) ? $fallback : ['pdf','doc','docx','xls','xlsx','ppt','pptx','txt'];
+        }
+        return $out;
+    }
+
+    protected function isAjaxRequest() {
+        $transport = (string) $this->wire('input')->post('webform_transport');
+        if(strtolower($transport) === 'ajax') return true;
+
+        $header = isset($_SERVER['HTTP_X_REQUESTED_WITH']) ? (string) $_SERVER['HTTP_X_REQUESTED_WITH'] : '';
+        if($header === '') {
+            $header = (string) $this->wire('input')->server->HTTP_X_REQUESTED_WITH;
+        }
+        return strtolower($header) === 'xmlhttprequest';
+    }
+
+    protected function handleAjaxEndpointRequest() {
+        $isEndpoint = (int) $this->wire('input')->get('webform_ajax_endpoint');
+        if($isEndpoint !== 1) return;
+
+        $webformId = (int) $this->wire('input')->post('webform_id');
+        if($webformId < 1) {
+            $this->sendAjaxJson(false, 'No se pudo procesar el envio.', 'missing_webform_id');
+        }
+
+        $formPage = $this->wire('pages')->get("template=webform, id={$webformId}");
+        if(!$formPage->id) {
+            $this->sendAjaxJson(false, 'No se pudo procesar el envio.', 'webform_not_found');
+        }
+
+        $result = $this->handleSubmission($formPage);
+        if(!$result['is_handled']) {
+            $this->sendAjaxJson(false, 'No se pudo procesar el envio.', 'submission_not_handled');
+        }
+
+        $this->sendAjaxJson((bool) $result['success'], (string) $result['message'], (string) $result['debug']);
+    }
+
+    protected function sendAjaxJson($success, $message, $debug = '') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'success' => (bool) $success,
+            'message' => (string) $message,
+            'debug' => $this->wire('config')->debug ? (string) $debug : '',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    protected function buildValidationConfig(array $attrs) {
+        $rules = [];
+        $messages = [];
+
+        foreach($attrs as $fset) {
+            if(!is_array($fset) || empty($fset['api']) || empty($fset['type'])) continue;
+            $api = $this->sanitizer->name((string) $fset['api']);
+            if($api === '') continue;
+
+            $type = (string) $fset['type'];
+            $required = !empty($fset['required']);
+            $inputName = ($type === 'Checkboxes') ? ($api . '[]') : $api;
+            $label = trim((string) ($fset['label'] ?? $api));
+
+            $fieldRules = [];
+            if($required) $fieldRules['required'] = true;
+            if($type === 'Email') $fieldRules['email'] = true;
+            if($type === 'Date') $fieldRules['webformDate'] = true;
+            if($type === 'Date' && !empty($fset['date_min'])) $fieldRules['webformDateMin'] = (string) $fset['date_min'];
+            if($type === 'Date' && !empty($fset['date_max'])) $fieldRules['webformDateMax'] = (string) $fset['date_max'];
+            if($type === 'URL') $fieldRules['url'] = true;
+            if($type === 'Integer') $fieldRules['digits'] = true;
+            if($type === 'Float') $fieldRules['number'] = true;
+
+            if(!count($fieldRules)) continue;
+            $rules[$inputName] = $fieldRules;
+
+            $fieldMessages = [];
+            if($required) $fieldMessages['required'] = $label . ' es requerido.';
+            if($type === 'Email') $fieldMessages['email'] = 'Ingresa un correo valido.';
+            if($type === 'Date') $fieldMessages['webformDate'] = 'Ingresa una fecha valida (AAAA-MM-DD).';
+            if($type === 'Date' && !empty($fset['date_min'])) $fieldMessages['webformDateMin'] = 'La fecha minima es ' . (string) $fset['date_min'] . '.';
+            if($type === 'Date' && !empty($fset['date_max'])) $fieldMessages['webformDateMax'] = 'La fecha maxima es ' . (string) $fset['date_max'] . '.';
+            if($type === 'URL') $fieldMessages['url'] = 'Ingresa una URL valida.';
+            if($type === 'Integer') $fieldMessages['digits'] = 'Solo numeros enteros.';
+            if($type === 'Float') $fieldMessages['number'] = 'Ingresa un numero valido.';
+            $messages[$inputName] = $fieldMessages;
+        }
+
+        return ['rules' => $rules, 'messages' => $messages];
+    }
+
+    protected function renderFrontendInitScript($formId, array $attrs, $isAjaxEnabled) {
+        $validation = $this->buildValidationConfig($attrs);
+        $safeFormId = $this->sanitizer->entities($formId);
+        $jsonRules = json_encode($validation['rules'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $jsonMessages = json_encode($validation['messages'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $ajaxEnabled = $isAjaxEnabled ? 'true' : 'false';
+
+        return '<script>(function(){if(typeof window.WebformBuilderInitForm!=="function"){window.__webformInitQueue=window.__webformInitQueue||[];window.__webformInitQueue.push({formId:"' . $safeFormId . '",ajaxEnabled:' . $ajaxEnabled . ',rules:' . $jsonRules . ',messages:' . $jsonMessages . '});return;}window.WebformBuilderInitForm({formId:"' . $safeFormId . '",ajaxEnabled:' . $ajaxEnabled . ',rules:' . $jsonRules . ',messages:' . $jsonMessages . '});})();</script>';
+    }
+
+    protected function renderOptionTags(array $field) {
+        $html = '';
+        foreach($this->parseOptions($field['select'] ?? '') as $opt) {
+            $sel = ((string)($field['value'] ?? '') === $opt['value']) ? ' selected' : '';
+            $html .= '<option value="' . $this->sanitizer->entities($opt['value']) . '"' . $sel . '>' . $this->sanitizer->entities($opt['label']) . '</option>';
+        }
+        return $html;
+    }
+
+    protected function renderRadioTags($name, array $field, $requiredAttr) {
+        $html = '';
+        foreach($this->parseOptions($field['select'] ?? '') as $opt) {
+            $sel = ((string)($field['value'] ?? '') === $opt['value']) ? ' checked' : '';
+            $html .= '<div class="form-check webform-check"><label class="form-check-label webform-check-label"><input class="form-check-input webform-check-input" type="radio" name="' . $name . '" value="' . $this->sanitizer->entities($opt['value']) . '"' . $requiredAttr . $sel . '> ' . $this->sanitizer->entities($opt['label']) . '</label></div>';
+        }
+        return $html;
+    }
+
+    protected function renderCheckboxTags($name, array $field, $requiredAttr) {
+        $html = '';
+        $isRequired = trim((string) $requiredAttr) !== '';
+        $index = 0;
+        foreach($this->parseOptions($field['select'] ?? '') as $opt) {
+            $attr = ($isRequired && $index === 0) ? $requiredAttr : '';
+            $html .= '<div class="form-check webform-check"><label class="form-check-label webform-check-label"><input class="form-check-input webform-check-input" type="checkbox" name="' . $name . '[]" value="' . $this->sanitizer->entities($opt['value']) . '"' . $attr . '> ' . $this->sanitizer->entities($opt['label']) . '</label></div>';
+            $index++;
+        }
+        return $html;
+    }
+
+    protected function parseOptions($raw) {
+        $tokens = explode(',', (string) $raw);
+        $out = [];
+        foreach($tokens as $token) {
+            $token = trim($token);
+            if($token === '') continue;
+            if(strpos($token, ':') !== false) {
+                list($v, $l) = explode(':', $token, 2);
+                $v = $this->sanitizer->name($v);
+                $l = rawurldecode(trim($l));
+                if($v === '') continue;
+                if($l === '') $l = $v;
+                $out[] = ['value' => $v, 'label' => $l];
+            } else {
+                $v = $this->sanitizer->name($token);
+                if($v === '') continue;
+                $out[] = ['value' => $v, 'label' => rawurldecode($token)];
+            }
+        }
+        return $out;
+    }
+
+    protected function buildRowsFromJson($json) {
+        $arr = json_decode($json, true);
+        if(!is_array($arr)) $arr = [];
+        $rows = '';
+        foreach($arr as $key => $value) {
+            $api = isset($value['api']) ? $this->sanitizer->entities($value['api']) : '';
+            $label = isset($value['label']) ? $this->sanitizer->entities($value['label']) : '';
+            $type = isset($value['type']) ? $this->sanitizer->entities($value['type']) : '';
+            $width = isset($value['width']) ? $this->sanitizer->entities($value['width']) : '100';
+            $required = !empty($value['required']) ? 'True' : 'False';
+            $rows .= "<tr data-index='{$key}'>"
+                . "<td class='pgs-drag'><i class='fa fa-bars' aria-hidden='true'></i></td>"
+                . "<td>{$label}</td><td>{$api}</td><td>{$type}</td><td>{$width}%</td><td>{$required}</td>"
+                . "<td class='pgs-actions'><a class='edit uk-button uk-button-default uk-button-small' href='#'><i class='fa fa-pencil' aria-hidden='true'></i></a> <a class='delete uk-button uk-button-danger uk-button-small' href='#'><i class='fa fa-trash' aria-hidden='true'></i></a></td>"
+                . "</tr>";
+        }
+        return $rows;
+    }
+}

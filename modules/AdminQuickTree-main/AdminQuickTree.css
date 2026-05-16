@@ -1,0 +1,32 @@
+/* quick tree */
+/* display tree nav inside first level */
+.pw .pw-dropdown-menu .page-8- > ul {
+    position: static !important;
+    display: block !important;
+}
+
+/* only show nav after ajax has been triggered */
+.pw .pw-dropdown-menu:has(.page-8-) {
+    padding: 0 !important;
+    visibility: hidden;
+}
+
+.pw .pw-dropdown-menu:has(.page-8- .pw-ajax-items-loaded) {
+    visibility: visible;
+}
+
+/* hide tree link */
+.pw .page-8- > a {
+    display: none !important;
+}
+
+/* change second add new button to bookmark */
+.pw .page-6- .fa-plus-circle:before {
+    content: "\f097";
+}
+
+/* fix: position load animation absolute to prevent shifting of sub menus */
+.pw .pw-dropdown-menu .fa-spinner {
+    position: absolute;
+    right: 2px;
+}

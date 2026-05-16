@@ -1,0 +1,223 @@
+<?php 
+
+/**
+ * SelectizeTemplateTags module for ProcessWire
+ *
+ */
+
+/**
+ * Class SelectizeTemplateFieldTags
+ */
+class SelectizeTemplateFieldTags extends \ProcessWire\WireData implements \ProcessWire\Module, \ProcessWire\ConfigurableModule {
+
+    protected $allowedTags = array();
+    protected $jsConfig = array();
+
+    public function setAllowedTag($value, $text) {
+        $this->allowedTags[] = array('value' => $value, 'text' => $text);
+    }
+
+    /**
+     * __construct() is the right place to init config vars before they'll get populated
+     *
+     */
+    public function __construct() {
+        $this->configData = $this->modules->getModuleConfigData($this);
+    }
+
+    public function init() {
+       
+        // only after 3.0.179, but no version bump yet
+        if(version_compare($this->wire('config')->version, '3.0.178', '>=')) {
+    	    $this->addHookAfter('Templates::getTags', $this, 'addUserTags');
+            $this->addHookAfter('Fields::getTags', $this, 'addUserTags');
+        }
+    }
+
+    public function getModuleConfigInputfields(array $data) {
+
+        $modules = $this->wire('modules');
+
+        $fields = new \ProcessWire\InputfieldWrapper();
+
+        // list of allowed tags
+        $field = $this->modules->get('InputfieldTextarea');
+        $field->attr('name', 'userTagsList');
+        $field->label = $this->_('Allowed tags for templates & fields.');
+        $description  = $this->_('List each tag, 1 per line, comma separated with the label to use for the tag');
+        $field->description = $description;
+        $notes  = 'Example: projects, Projects etc; Note: If you do not define tags here make sure to check below to allow tag creation!';
+        $field->notes = $notes;
+        $field->value = trim($this->userTagsList);
+        $fields->add($field);
+
+        // Allow create ad-hoc tags
+        $field = $modules->get('InputfieldCheckbox');
+        $field->name = 'allowTagCreate';
+        $field->label = \ProcessWire\__('Allow tag creation?', '/mnt/desarrollo/server/processwire/site-ase/modules/SelectizeTemplateFieldTags-master/SelectizeTemplateFieldTags.module');
+        $field->description = $this->_('By default tags are limited to the items listed above. Check this to allow any tags to be input.');
+        $field->notes = "If this is unchecked AND there are already tags on templates AND those tags are not in your permitted list, they will end up being deleted when users save the page.";
+        $field->value = (isset($data['allowTagCreate'])) ? $data['allowTagCreate'] : 0;
+        $field->checked = ($field->value == 1) ? 'checked' : '';
+        $field->columnWidth = 33;
+        $fields->add($field);
+
+
+        $field = $modules->get('InputfieldCheckbox');
+        $field->name = 'enhanceIconSelect';
+        $field->label = \ProcessWire\__('Enable Selectize on icon select?', '/mnt/desarrollo/server/processwire/site-ase/modules/SelectizeTemplateFieldTags-master/SelectizeTemplateFieldTags.module');
+        $field->description = $this->_('This enhances the icon select box to use Selectize.js.');
+        $field->notes = "Note: this will disable the current ability to show all the icons as selectize.js removes the options.";
+        $field->value = (isset($data['enhanceIconSelect'])) ? $data['enhanceIconSelect'] : 0;
+        $field->checked = ($field->value == 1) ? 'checked' : '';
+        $field->columnWidth = 33;
+        $fields->add($field);
+
+        // Plugins to load
+        $field = $modules->get('InputfieldCheckboxes');
+        $field->name = 'plugins';
+        $field->label = \ProcessWire\__('Plugins', '/mnt/desarrollo/server/processwire/site-ase/modules/SelectizeTemplateFieldTags-master/SelectizeTemplateFieldTags.module');
+        $field->addOption('remove_button', \ProcessWire\__('Remove Button'));
+        $field->addOption('drag_drop', \ProcessWire\__('Drag and Drop'));
+        $field->addOption('restore_on_backspace', \ProcessWire\__('Restore on Backspace'));
+        $field->value = isset($data['plugins']) ? $data['plugins'] : '';
+        $field->columnWidth = 33;
+        $fields->add($field);
+
+        return $fields;
+    }
+
+
+    public function ready() {
+
+        $proc = $this->wire('page')->process;
+        $allowedProcesses = array('ProcessTemplate', 'ProcessField');
+        if(!in_array($proc, $allowedProcesses)) return false;
+        if($this->wire('page')->template->name != 'admin') return false;
+
+        $this->addHookBefore('ProcessTemplate::executeEdit', $this, 'addAssets');
+        $this->addHookBefore('ProcessField::executeEdit', $this, 'addAssets');
+
+        return false;
+    }
+
+
+    // only after 3.0.179 - add module defined tags to the new tags field.
+    public function addUserTags(\ProcessWire\HookEvent $event) {
+
+    	$tagsArray = $event->return;
+
+    	$configData = $this->configData;
+        // User Defined Tags
+        if(isset($configData['userTagsList']) && $configData['userTagsList'] !== '') {
+            $userTags = [];
+            $userTagsLines = explode(PHP_EOL, $configData['userTagsList']);
+            foreach($userTagsLines as $row) {
+                $parts = explode(',', $row);
+                $tagVal = trim($parts[0]);
+                $tagTxt = isset($parts[1]) ? trim($parts[1]) : trim($parts[0]);
+                $userTags[$tagVal] = $tagTxt;
+            }
+
+            $tagsArray = array_merge($tagsArray,$userTags);
+            ksort($tagsArray);
+            $event->return = $tagsArray;
+
+        } 
+
+    }
+
+
+    public function addAssets(\ProcessWire\HookEvent $event) {
+
+        $this->config->scripts->add($this->config->urls->siteModules . __CLASS__ . '/' . __CLASS__ . '.js?v=' . time());
+
+        $configData = $this->configData;
+
+        // Tags In Use
+        $usedTags = [];
+        foreach($this->wire('templates') as $t) {
+            if($t->tags) {
+                $tags = explode(' ',$t->tags);
+                $usedTags = array_merge($tags,$usedTags);
+            }
+        }
+        foreach($this->wire('fields') as $f) {
+            if($f->tags) {
+                $tags = explode(' ',$f->tags);
+                $usedTags = array_merge($tags,$usedTags);
+            }
+        }
+        $usedTags = array_values(array_unique($usedTags));
+        foreach($usedTags as $usedTag) {
+            $this->setAllowedTag($usedTag, $usedTag);
+        }
+
+        // User Defined Tags
+        if(isset($configData['userTagsList']) && $configData['userTagsList'] !== '') {
+            $userTagsLines = explode(PHP_EOL, $configData['userTagsList']);
+            foreach($userTagsLines as $row) {
+                $parts = explode(',', $row);
+                $tagVal = trim($parts[0]);
+                $tagTxt = isset($parts[1]) ? trim($parts[1]) : trim($parts[0]);
+                $this->setAllowedTag($tagVal, $tagTxt);
+            }
+        } 
+
+        if($this->allowedTags) {
+            $tags = [];
+            foreach($this->allowedTags as $tag) {
+                if( substr($tag['value'],0,1) == '-') continue;
+                $tags[$tag['value']] = $tag['text'];
+            }
+            ksort($tags);
+            $tagsArray = [];
+            foreach($tags as $value => $text) {
+                $tagsArray[] = ["value" => $value,"text" => $text];
+            }
+            $this->jsConfig['tags'] = $tagsArray;
+        } else {
+            $this->jsConfig['tags'] = [
+                ["value" => "No Tags", "label" => "No Tags"],
+            ];
+        }
+        
+        if(isset($configData['plugins'])) {
+            $this->jsConfig['plugins'] = $configData['plugins'];
+        }
+
+        if (isset($configData['allowTagCreate']) && $configData['allowTagCreate'] == 1) {
+            $this->jsConfig['create'] = true;
+        }
+
+        if (isset($configData['enhanceIconSelect']) && $configData['enhanceIconSelect'] == 1) {
+            $this->jsConfig['enhance'] = true;
+        }
+
+        // Prevent Init for newer versions that have built in tagging
+        if(version_compare($this->wire('config')->version, '3.0.176', '>=')) {
+            $this->jsConfig['init'] = false;
+        } else {
+            $this->jsConfig['init'] = true;
+        }
+
+
+        if(version_compare($this->wire('config')->version, '3.0.67', '<')) {
+            $this->modules->JquerySelectize;
+        } else {
+            // if the version is >= than 3.0.67, and jQuerySelectize module is installed,
+            // init the module, in case a skin is selected; the module will use the core
+            // selectize library anyway...
+            if($this->modules->get('JquerySelectize')) {
+                $this->modules->JquerySelectize;
+            } else {
+                $this->wire('modules')->get('JqueryUI')->use('selectize');
+            }
+        }
+
+        $this->config->js(__CLASS__, $this->jsConfig);
+        return false;
+    }
+
+
+}

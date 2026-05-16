@@ -1,0 +1,2 @@
+// Hide duplicate link for top level menu item in sidenav (mobile) because it doesn't link to anything
+#sidenav-page--1 + ul > .pw-nav-dup { display:none; }

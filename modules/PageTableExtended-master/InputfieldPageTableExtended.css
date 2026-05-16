@@ -1,0 +1,31 @@
+.InputfieldPageTableExtended .renderedLayoutTitle {
+	font-size: 0.7em;
+	text-transform: uppercase;
+	color: #777; 
+	display: inline-block;
+	margin-left: 10px;
+	cursor: move;
+}
+.InputfieldPageTableExtended div.renderedLayout.hiddenOnStart{
+	display: none;
+}
+
+.InputfieldPageTableExtended .toggleRenderedLayout{
+	width: 10px;
+	display: inline-block;
+	text-align: center;
+}
+
+.InputfieldPageTableExtended .renderedLayoutTitle.pte-open {
+	color: #ccc;
+}
+
+.InputfieldPageTableExtended .pte-unpublished .renderedLayoutTitle {
+	text-decoration:line-through; 
+}
+
+.InputfieldPageTableExtended .renderedLayout img{
+	max-width: 100%;
+}
+
+

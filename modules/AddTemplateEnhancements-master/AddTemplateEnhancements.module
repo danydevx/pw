@@ -1,0 +1,338 @@
+<?php namespace ProcessWire;
+
+class AddTemplateEnhancements extends WireData implements Module, ConfigurableModule {
+
+	/**
+	 * Module information
+	 */
+	public static function getModuleInfo() {
+		return array(
+			'title' => "Add Template Enhancements",
+			'summary' => 'Some efficiency enhancements when adding or cloning a template.',
+			'version' => '0.1.5',
+			'author' => 'Robin Sallis',
+			'href' => 'https://github.com/Toutouwai/AddTemplateEnhancements',
+			'icon' => 'cubes',
+			'autoload' => true,
+			'requires' => 'ProcessWire>=3.0.16, PHP>=5.4.0'
+		);
+	}
+
+	protected $separators = array();
+
+	/**
+	 * Construct
+	 */
+	public function __construct() {
+		parent::__construct();
+		// Default config
+		$this->derive_label_options = 'admin';
+		$this->capitalisation = 'sentence_case';
+		$this->replace_underscores = 1;
+		$this->replace_hyphens = 0;
+		$this->edit_after_add = 1;
+		$this->copy_context_on_clone = 1;
+		$this->copy_context_on_duplicate = 1;
+	}
+
+	/**
+	 * Init
+	 */
+	public function init() {
+		if($this->replace_underscores) $this->separators[] = '_';
+		if($this->replace_hyphens) $this->separators[] = '-';
+		if($this->derive_label_options === 'admin_api') {
+			$this->addHookBefore('Templates::save', $this, 'deriveLabelOnAdd');
+		}
+	}
+
+	/**
+	 * Ready
+	 */
+	public function ready() {
+
+		if($this->derive_label_options === 'admin') {
+			$this->addHookBefore('ProcessTemplate::executeAdd', $this, 'adminAdd');
+		}
+		if($this->edit_after_add === 1) {
+			$this->addHookBefore('ProcessTemplate::executeAdd', $this, 'editAfterAdd');
+		}
+		if($this->copy_context_on_clone === 1) {
+			$this->addHookAfter('Templates::clone', $this, 'copyContextOnClone');
+		}
+		if($this->copy_context_on_duplicate === 1) {
+			$this->addHookBefore('ProcessTemplate::executeAdd', $this, 'copyContextOnDuplicate');
+		}
+
+	}
+
+	/**
+	 * Before template added in admin
+	 *
+	 * @param HookEvent $event
+	 */
+	protected function adminAdd(HookEvent $event) {
+		$this->addHookBefore('Templates::save', $this, 'deriveLabelOnAdd');
+	}
+
+	/**
+	 * Automatically derive template label from template name when new template is added
+	 *
+	 * @param HookEvent $event
+	 */
+	protected function deriveLabelOnAdd(HookEvent $event) {
+		/** @var Template $new_tpl */
+		$new_tpl = $event->arguments(0);
+		// Only if this is a new template
+		if($new_tpl->id > 0) return;
+		$label = $new_tpl->name;
+		$label = $this->separatorsToSpaces($label, $this->separators);
+		if($this->capitalisation !== 'no_change') $label = $this->capitalise($label, $this->capitalisation);
+		$new_tpl->label = $label;
+	}
+
+	/**
+	 * Capitalise a string
+	 *
+	 * @param string $str
+	 * @param string $format The format of capitalisation: sentence_case or title_case
+	 * @return string
+	 */
+	public function capitalise($str, $format) {
+		if($format === 'sentence_case') $function = 'ucfirst';
+		if($format === 'title_case') $function = 'ucwords';
+		if(!isset($function)) return $str;
+		return $function($str);
+	}
+
+	/**
+	 * Convert separators in a string to spaces
+	 *
+	 * @param string $str
+	 * @param array $separators Characters to replace with a space
+	 * @return string
+	 */
+	public function separatorsToSpaces($str, $separators = array()) {
+		if(empty($separators)) return $str;
+		return str_replace($separators, ' ', $str);
+	}
+
+	/**
+	 * If only one new template is being added, edit this template immediately afterwards
+	 *
+	 * @param HookEvent $event
+	 */
+	protected function editAfterAdd(HookEvent $event) {
+		$input = $this->wire()->input;
+		$new_templates = $input->post('templates');
+		if(!is_array($new_templates)) $new_templates = array();
+		$template_name = $input->post('template_name');
+		if($template_name && strpos($template_name, ' ') !== false) return;
+		if($template_name) $new_templates[] = $template_name;
+		if(count($new_templates) !== 1) return;
+		$new_template_name = $this->wire()->sanitizer->name($new_templates[0]);
+		if($new_template_name) {
+			$this->addHookBefore('Session::redirect', function(HookEvent $event) use ($new_template_name) {
+				$tpl = $this->wire()->templates->get($new_template_name);
+				$event->arguments(0, "./edit?id={$tpl->id}");
+			});
+		}
+	}
+
+	/**
+	 * Copy field contexts when a template is cloned
+	 *
+	 * @param HookEvent $event
+	 */
+	protected function copyContextOnClone(HookEvent $event) {
+
+		/** @var Template $tpl */
+		$tpl = $event->arguments(0);
+		$new_tpl_name = $event->arguments(1);
+		$contexts = $this->getContexts($tpl->fieldgroup);
+		/** @var Template $new_tpl */
+		$new_tpl = $this->wire()->templates->get($new_tpl_name);
+		$this->setContexts($new_tpl->fieldgroup, $contexts);
+
+		// Derive label from name?
+		if($this->derive_label_options === 'admin' || $this->derive_label_options === 'admin_api') {
+			$label = $new_tpl_name;
+			$label = $this->separatorsToSpaces($label, $this->separators);
+			if($this->capitalisation !== 'no_change') $label = $this->capitalise($label, $this->capitalisation);
+			$new_tpl->label = $label;
+			$new_tpl->save();
+		}
+
+	}
+
+	/**
+	 * Copy field contexts when a new template is added in admin with the "Duplicate fields used by another template" option
+	 *
+	 * @param HookEvent $event
+	 */
+	protected function copyContextOnDuplicate(HookEvent $event) {
+		$fg_name = $this->wire()->sanitizer->name($this->wire()->input->post('import_fieldgroup'));
+		if(!$fg_name) return;
+		/** @var Fieldgroup $import_fg */
+		$import_fg = $this->wire()->fieldgroups->get($fg_name);
+		if(!$import_fg) return;
+		$contexts = $this->getContexts($import_fg);
+		if(count($contexts)) {
+			$this->addHookAfter('Fieldgroups::save', function(HookEvent $event) use ($contexts) {
+				/** @var Fieldgroup $new_fg */
+				$new_fg = $event->arguments(0);
+				$this->setContexts($new_fg, $contexts);
+			});
+		}
+	}
+
+	/**
+	 * Get field contexts for a Fieldgroup
+	 *
+	 * @param Fieldgroup $fieldgroup
+	 * @return array Array of field context changes
+	 */
+	protected function getContexts($fieldgroup) {
+		$contexts = array();
+		foreach($fieldgroup as $field) {
+			$context = $fieldgroup->getFieldContextArray($field->id);
+			if($context) $contexts[$field->name] = $context;
+		}
+		return $contexts;
+	}
+
+	/**
+	 * Set field contexts for a Fieldgroup
+	 *
+	 * @param Fieldgroup $fieldgroup
+	 * @param array $contexts
+	 */
+	protected function setContexts($fieldgroup, $contexts = array()) {
+		foreach($fieldgroup as $field) {
+			if(isset($contexts[$field->name])) $fieldgroup->setFieldContextArray($field->id, $contexts[$field->name]);
+		}
+		$fieldgroup->saveContext();
+	}
+
+	/**
+	 * Config inputfields
+	 *
+	 * @param InputfieldWrapper $inputfields
+	 */
+	public function getModuleConfigInputfields($inputfields) {
+		$modules = $this->wire()->modules;
+
+		/** @var InputfieldRadios $f */
+		$f = $modules->get('InputfieldRadios');
+		$f_name = 'derive_label_options';
+		$f->name = $f_name;
+		$f->label = $this->_('Derive label from name when new template added');
+		$f->options = array(
+			'admin' => $this->_('When template added in admin'),
+			'admin_api' => $this->_('When template added in admin or via API'),
+			'no' => $this->_("Don't derive template label from name"),
+		);
+		$f->value = $this->$f_name;
+		$inputfields->add($f);
+
+		/** @var InputfieldFieldset $fs */
+		$fs = $modules->get('InputfieldFieldset');
+		$fs->name = 'label_options';
+		$fs->label = $this->_('Label options');
+		$fs->showIf = 'derive_label_options=admin|admin_api';
+		$inputfields->add($fs);
+
+		/** @var InputfieldCheckbox $f */
+		$f = $modules->get('InputfieldCheckbox');
+		$f_name = 'replace_underscores';
+		$f->name = $f_name;
+		$f->label = $this->_('Replace underscores with spaces');
+		$f->columnWidth = 33;
+		$f->checked = $this->$f_name === 1 ? 'checked' : '';
+		$fs->add($f);
+
+		/** @var InputfieldCheckbox $f */
+		$f = $modules->get('InputfieldCheckbox');
+		$f_name = 'replace_hyphens';
+		$f->name = $f_name;
+		$f->label = $this->_('Replace hyphens with spaces');
+		$f->columnWidth = 33;
+		$f->checked = $this->$f_name === 1 ? 'checked' : '';
+		$fs->add($f);
+
+		/** @var InputfieldRadios $f */
+		$f = $modules->get('InputfieldRadios');
+		$f_name = 'capitalisation';
+		$f->name = $f_name;
+		$f->label = $this->_('Capitalisation');
+		$f->options = array(
+			'sentence_case' => $this->_('Sentence case'),
+			'title_case' => $this->_('Title case'),
+			'no_change' => $this->_('No change'),
+		);
+		$f->optionColumns = 1;
+		$f->columnWidth = 34;
+		$f->value = $this->$f_name;
+		$fs->add($f);
+
+		/** @var InputfieldCheckbox $f */
+		$f = $modules->get('InputfieldCheckbox');
+		$f_name = 'edit_after_add';
+		$f->name = $f_name;
+		$f->label = $this->_('Edit template after add');
+		$f->description = $this->_('When adding only a single template, open that template for editing after it is added.');
+		$f->checked = $this->$f_name === 1 ? 'checked' : '';
+		$inputfields->add($f);
+
+		/** @var InputfieldCheckbox $f */
+		$f = $modules->get('InputfieldCheckbox');
+		$f_name = 'copy_context_on_clone';
+		$f->name = $f_name;
+		$f->label = $this->_('Copy field contexts when cloning');
+		$f->description = $this->_('When cloning a template, copy field contexts to the new template.');
+		$f->columnWidth = 50;
+		$f->checked = $this->$f_name === 1 ? 'checked' : '';
+		$inputfields->add($f);
+
+		/** @var InputfieldCheckbox $f */
+		$f = $modules->get('InputfieldCheckbox');
+		$f_name = 'copy_context_on_duplicate';
+		$f->name = $f_name;
+		$f->label = $this->_('Copy field contexts when duplicating fields');
+		$f->description = $this->_('When adding a new template with the "Duplicate fields used by another template" option, copy field contexts to the new template.');
+		$f->columnWidth = 50;
+		$f->checked = $this->$f_name === 1 ? 'checked' : '';
+		$inputfields->add($f);
+
+	}
+
+	/**
+	 * On module upgrade
+	 *
+	 * @param int|string $fromVersion
+	 * @param int|string $toVersion
+	 */
+	public function ___upgrade($fromVersion, $toVersion) {
+		$modules = $this->wire()->modules;
+		// Convert integer version to semantic version
+		if(is_int($fromVersion)) $fromVersion = '0.0.' . $fromVersion;
+
+		// Upgrade from < v0.1.1
+		if(version_compare($fromVersion, '0.1.1', '<')) {
+			// Get existing config
+			$cfg = $modules->getConfig($this);
+			// convert roles field value to array
+			if(isset($cfg['derive_label'])) {
+				if($cfg['derive_label'] === 1) {
+					$cfg['derive_label_options'] = 'admin';
+				} else {
+					$cfg['derive_label_options'] = 'no';
+				}
+				unset($cfg['derive_label']);
+				// Save config
+				$modules->saveConfig($this, $cfg);
+			}
+		}
+	}
+
+}

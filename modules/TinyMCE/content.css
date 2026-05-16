@@ -1,0 +1,47 @@
+.mce-content-body {
+ 
+}
+
+/* Reset básico para evitar estilos heredados */
+ 
+/* Imágenes sin estilos */
+.mce-content-body img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Tablas sin formato */
+.mce-content-body section{
+  border:1px solid  #CCC;
+}
+
+.mce-content-body table {
+  border-collapse: collapse;
+}
+
+/* Sin bordes ni padding en celdas */
+.mce-content-body table td,
+.mce-content-body table th {
+  padding: 0;
+  border: 0;
+}
+
+ 
+
+/* Blockquote sin formato */
+.mce-content-body blockquote {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font: inherit;
+}
+
+/* Sin estilos para pre/code */
+.mce-content-body pre,
+.mce-content-body code {
+  font: inherit;
+  color: inherit;
+  background: none;
+  padding: 0;
+  border: 0;
+}

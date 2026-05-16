@@ -1,0 +1,36 @@
+.InputfieldNestedCheckboxes {
+  margin-left: -7px;
+  margin-top: -5px; }
+  .InputfieldNestedCheckboxes .inc-container {
+    display: none; }
+    .InputfieldNestedCheckboxes .inc-container.init {
+      display: block; }
+  .InputfieldNestedCheckboxes .inc-parent, .InputfieldNestedCheckboxes .inc-grandparent {
+    position: relative;
+    padding-left: 25px;
+    margin-top: 5px; }
+    .InputfieldNestedCheckboxes .inc-parent .inc-branch-toggle, .InputfieldNestedCheckboxes .inc-grandparent .inc-branch-toggle {
+      position: absolute;
+      top: 0;
+      left: 7px;
+      cursor: pointer;
+      padding: 4px 8px 4px 0;
+      opacity: 0.5; }
+      .InputfieldNestedCheckboxes .inc-parent .inc-branch-toggle:hover, .InputfieldNestedCheckboxes .inc-grandparent .inc-branch-toggle:hover {
+        opacity: 1; }
+    .InputfieldNestedCheckboxes .inc-parent.collapsed .inc-branch-toggle, .InputfieldNestedCheckboxes .inc-grandparent.collapsed .inc-branch-toggle {
+      padding: 3px 3px 5px 5px; }
+      .InputfieldNestedCheckboxes .inc-parent.collapsed .inc-branch-toggle:before, .InputfieldNestedCheckboxes .inc-grandparent.collapsed .inc-branch-toggle:before {
+        content: "\f105"; }
+    .InputfieldNestedCheckboxes .inc-parent.collapsed > .inc-parent, .InputfieldNestedCheckboxes .inc-parent.collapsed > ul, .InputfieldNestedCheckboxes .inc-grandparent.collapsed > .inc-parent, .InputfieldNestedCheckboxes .inc-grandparent.collapsed > ul {
+      display: none; }
+  .InputfieldNestedCheckboxes ul {
+    list-style-type: none;
+    padding-left: 25px;
+    margin: 0; }
+    .InputfieldNestedCheckboxes ul[class*="InputfieldCheckboxes"]:before {
+      content: none; }
+  .InputfieldNestedCheckboxes label input[type="checkbox"] {
+    margin-right: 0.5em; }
+    body.AdminThemeUikitDefault .InputfieldNestedCheckboxes label input[type="checkbox"]:indeterminate {
+      background-color: var(--pw-main-color); }

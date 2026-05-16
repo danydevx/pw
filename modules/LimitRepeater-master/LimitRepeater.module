@@ -1,0 +1,282 @@
+<?php namespace ProcessWire;
+
+class LimitRepeater extends WireData implements Module, ConfigurableModule {
+
+	/**
+	 * Module information
+	 */
+	public static function getModuleInfo() {
+		return array(
+			'title' => 'Limit Repeater',
+			'version' => '0.2.2',
+			'summary' => 'Allows restrictions and limits to be placed on Repeater fields.',
+			'author' => 'Robin Sallis',
+			'href' => 'https://github.com/Toutouwai/LimitRepeater',
+			'autoload' => "template=admin",
+			'icon' => 'list',
+			'requires' => 'ProcessWire>=3.0.0, PHP>=5.4.0',
+		);
+	}
+
+	protected $controls = [];
+
+	/**
+	 * Construct
+	 */
+	public function __construct() {
+		parent::__construct();
+		// Populate controls array
+		$this->controls['nodrag'] = [
+			'label' => $this->_('No drag'),
+			'identifier' => 'InputfieldRepeaterDrag',
+		];
+		$this->controls['noclone'] = [
+			'label' => $this->_('No clone'),
+			'identifier' => 'InputfieldRepeaterClone',
+		];
+		$this->controls['notoggle'] = [
+			'label' => $this->_('No toggle'),
+			'identifier' => 'InputfieldRepeaterToggle',
+		];
+		$this->controls['notrash'] = [
+			'label' => $this->_('No trash'),
+			'identifier' => 'InputfieldRepeaterTrash',
+		];
+		$this->controls['limit'] = '';
+		$this->controls['limit_clone'] = '';
+	}
+
+	/**
+	 * Ready
+	 */
+	public function ready() {
+		$this->addHookAfter('FieldtypeRepeater::getConfigInputfields', $this, 'addConfigInputfields');
+		$this->addHookAfter('InputfieldRepeater::renderReadyHook', $this, 'afterRenderReady');
+		$this->addHookAfter('InputfieldRepeater::render', $this, 'afterRender');
+	}
+
+	/**
+	 * Add config inputfields
+	 *
+	 * @param HookEvent $event
+	 */
+	function addConfigInputfields(HookEvent $event) {
+		$field = $event->arguments(0);
+		$wrapper = $event->return;
+		$modules = $this->wire()->modules;
+
+		// Return early if this is not a Repeater field (e.g. RepeaterMatrix)
+		if($field->type != 'FieldtypeRepeater') return;
+
+		// Create fieldset
+		/* @var InputfieldFieldset $fieldset */
+		$fieldset = $modules->get('InputfieldFieldset');
+		$fieldset->name = '_limitRepeaterSettings';
+		$fieldset->label = $this->_('Restrictions');
+		$fieldset->icon = 'minus-circle';
+		// Collapse as per other Repeater config fieldsets
+		$fieldset->collapsed = Inputfield::collapsedYes;
+
+		// Checkbox fields
+		foreach($this->controls as $control => $details) {
+			if($control === 'limit' || $control === 'limit_clone') continue;
+			/* @var InputfieldCheckbox $f */
+			$f = $modules->get('InputfieldCheckbox');
+			$f_name = $control;
+			$f->name = $f_name;
+			$f->label = $details['label'];
+			$f->columnWidth = 25;
+			$f->attr('checked', $field->$f_name === 1 ? 'checked' : '');
+			$fieldset->add($f);
+		}
+
+		// Limit field
+		/* @var InputfieldInteger $f */
+		$f = $modules->get('InputfieldInteger');
+		$f_name = 'limit';
+		$f->name = $f_name;
+		$f->label = $this->_('Limit');
+		$f->columnWidth = 50;
+		$f->inputType = 'number';
+		$f->min = 0;
+		$f->max = 200;
+		$f->value = $field->$f_name;
+		$fieldset->add($f);
+
+		// Option to hide clone button when limit is reached
+		/* @var InputfieldCheckbox $f */
+		$f = $modules->get('InputfieldCheckbox');
+		$f_name = 'limit_clone';
+		$f->name = $f_name;
+		$f->label = $this->_('Hide clone button when limit is reached');
+		$f->columnWidth = 50;
+		$f->attr('checked', $field->$f_name === 1 ? 'checked' : '');
+		$f->showIf = "limit!=''";
+		$fieldset->add($f);
+
+		// Add fieldset
+		$wrapper->add($fieldset);
+	}
+
+	/**
+	 * After InputfieldRepeater::renderReadyHook
+	 *
+	 * @param HookEvent $event
+	 */
+	public function afterRenderReady(HookEvent $event) {
+		$config = $this->wire()->config;
+		$info = $this->getModuleInfo();
+		$version = $info['version'];
+		$config->scripts->add($config->urls->$this . "$this.js?v=$version");
+	}
+
+	/**
+	 * After InputfieldRepeater::render
+	 * Append code to rendered Repeater inputfield
+	 *
+	 * @param HookEvent $event
+	 */
+	public function afterRender(HookEvent $event) {
+		$process = $this->process;
+		if(!$process instanceof WirePageEditor) return;
+		/* @var ProcessPageEdit $process */
+		$page = $process->getPage();
+
+		/** @var InputfieldRepeater */
+		$inputfield = $event->object;
+		$field = $inputfield->hasField;
+		if(!$field) return;
+
+		// Return early if this is not a standard Repeater field
+		if($inputfield->className !== 'InputfieldRepeater') return;
+
+		// Get any restrictions via hookable method
+		$restrictions = $this->checkRestrictions($field, $inputfield, $page);
+		if(!is_array($restrictions)) return;
+
+		$out = '';
+		$css = '.lr-show { display:block !important; }';
+		$call_checkRepeater = '';
+		// Prefix for direct children only (in case of nested repeater)
+		$prefix = ".Inputfield_{$inputfield->name} > div > ul > li > label";
+		$limit_clone = $restrictions['limit_clone'] ? '1' : '';
+		if(!empty($restrictions['nodrag'])) $css .= "$prefix .InputfieldRepeaterDrag, ";
+		if(!empty($restrictions['noclone'])) $css .= "$prefix .InputfieldRepeaterClone, ";
+		if(!empty($restrictions['notoggle'])) $css .= "$prefix .InputfieldRepeaterToggle, ";
+		if(!empty($restrictions['notrash'])) $css .= "$prefix .InputfieldRepeaterTrash, ";
+		$css = rtrim($css, ', ');
+		if($css) $css .= " { display:none !important; }";
+		// If limit is populated and is an integer (but maybe in string type)
+		if($restrictions['limit'] !== null && (is_int($restrictions['limit']) || ctype_digit($restrictions['limit']))) {
+			// Hide add link by default
+			$css .= "\n.Inputfield_{$inputfield->name} > div > .InputfieldRepeaterAddItem { display:none; }";
+			// Call JS function
+			$call_checkRepeater .= "checkRepeater('.Inputfield_{$inputfield->name}', '{$restrictions['limit']}', '$limit_clone');";
+		}
+		$out .= "<style>$css</style>";
+		if($call_checkRepeater) {
+			$out .= <<<EOT
+<script>
+$(function() {
+	$(document).ready(function() {
+		$call_checkRepeater
+	});
+	$(document).ajaxComplete(function() {
+		$call_checkRepeater
+	});
+});
+</script>
+EOT;
+		}
+		$event->return .= $out;
+	}
+
+	/**
+	 * Check for any restrictions on this Repeater field (hookable)
+	 *
+	 * @param FieldtypeRepeater $field Repeater field
+	 * @param InputfieldRepeater $inputfield Repeater inputfield
+	 * @param Page $page The page open in ProcessPageEdit
+	 * @return array Array of restrictions
+	 */
+	public function ___checkRestrictions($field, $inputfield, $page) {
+		$restrictions = [];
+		foreach($this->controls as $control => $details) {
+			$value = $field->$control;
+			// For everything apart from the limit, cast to boolean for clarity
+			if($control !== 'limit') $value = (bool) $value;
+			$restrictions[$control] = $value;
+		}
+		return $restrictions;
+	}
+
+	/**
+	 * Upgrade
+	 */
+	public function ___upgrade($fromVersion, $toVersion) {
+		// Convert integer version to semantic version
+		if(is_int($fromVersion)) $fromVersion = '0.0.' . $fromVersion;
+
+		// Upgrade from < v0.2.0
+		if(version_compare($fromVersion, '0.2.0', '<')) {
+			$fields = $this->wire()->fields;
+			$cfg = $this->wire()->modules->getModuleConfigData($this->className());
+			if(!empty($cfg['codes'])) {
+				$codes = explode('|', rtrim($cfg['codes'], '|'));
+				foreach($codes as $code) {
+					$field_name = $cfg["repeater_$code"];
+					$field = $fields->get($field_name);
+					if(!$field) continue;
+					if(!empty($cfg["nodrag_$code"])) $field->nodrag = 1;
+					if(!empty($cfg["noclone_$code"])) $field->noclone = 1;
+					if(!empty($cfg["notoggle_$code"])) $field->notoggle = 1;
+					if(!empty($cfg["notrash_$code"])) $field->notrash = 1;
+					if(isset($cfg["limit_$code"]) && $cfg["limit_$code"] !== '') $field->limit = (int) $cfg["limit_$code"];
+					$fields->save($field);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Uninstall
+	 */
+	public function ___uninstall() {
+		// Remove config data for Repeater fields
+		$repeaters = $this->wire()->fields->find("type=FieldtypeRepeater");
+		foreach($repeaters as $field) {
+			$field->remove('nodrag');
+			$field->remove('noclone');
+			$field->remove('notoggle');
+			$field->remove('notrash');
+			$field->remove('limit');
+			$field->save();
+		}
+	}
+
+	/**
+	 * Config inputfields
+	 *
+	 * @param InputfieldWrapper $inputfields
+	 */
+	public function getModuleConfigInputfields($inputfields) {
+		$modules = $this->wire()->modules;
+		$repeater_fields = $this->wire()->fields->find("type=FieldtypeRepeater");
+
+		/** @var InputfieldMarkup $f */
+		$f = $modules->get('InputfieldMarkup');
+		$f->label = $this->_('Configuration');
+		$f->icon = 'cog';
+		$f->value = '<p>' . $this->_('Please configure the settings for this module at Setup > Fields > [your Repeater field]. The settings are contained within the "Restrictions" fieldset on the "Details" tab.') . '</p>';
+		if($repeater_fields->count) {
+			$f->value .= '<ul>';
+			foreach($repeater_fields as $repeater_field) {
+				$href = $this->wire()->config->urls->admin . "setup/field/edit?id={$repeater_field->id}#find-limit";
+				$f->value .= "<li><a href='$href'>$repeater_field->name</a></li>";
+			}
+			$f->value .= '</ul>';
+		}
+		$inputfields->add($f);
+	}
+
+}

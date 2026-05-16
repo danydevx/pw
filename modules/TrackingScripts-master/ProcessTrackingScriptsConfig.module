@@ -1,0 +1,241 @@
+<?php namespace ProcessWire;
+
+class ProcessTrackingScriptsConfig extends Process {
+
+    public function ___execute() {
+        $modules = $this->wire('modules');
+        $input = $this->wire('input');
+        $targetModule = 'TrackingScripts';
+
+        $savedConfig = $modules->getConfig($targetModule);
+        if (!is_array($savedConfig)) $savedConfig = [];
+
+        $form = $this->buildForm($savedConfig);
+
+        if ($input->post('submit_save')) {
+            $form->processInput($input->post);
+            $newConfig = $savedConfig;
+            foreach ($this->getFieldDefinitions() as $fieldsetKey => $fieldset) {
+                foreach ($fieldset['children'] as $name => $def) {
+                    $newConfig[$name] = $form->getChildByName($name)->val();
+                }
+            }
+            $modules->saveConfig($targetModule, $newConfig);
+            $this->message($this->_('Configuración guardada'));
+            $this->wire('session')->redirect($this->wire('page')->url);
+        }
+
+        return $form->render();
+    }
+
+    protected function buildForm(array $savedConfig): InputfieldForm {
+        $modules = $this->wire('modules');
+        $root = $this->wire('config')->paths->root;
+        $form = $modules->get('InputfieldForm');
+        $form->attr('method', 'post');
+        $form->attr('action', './');
+
+        foreach ($this->getFieldDefinitions() as $fieldsetKey => $fieldset) {
+            $fs = $modules->get('InputfieldFieldset');
+            $fs->label = $fieldset['label'];
+            if (isset($fieldset['columnWidth'])) $fs->columnWidth = $fieldset['columnWidth'];
+
+            foreach ($fieldset['children'] as $name => $def) {
+                switch ($def['type']) {
+                    case 'textarea': $type = 'InputfieldTextarea'; break;
+                    case 'select':   $type = 'InputfieldSelect'; break;
+                    case 'checkbox': $type = 'InputfieldCheckbox'; break;
+                    default:         $type = 'InputfieldText'; break;
+                }
+                $f = $modules->get($type);
+                $f->attr('name', $name);
+                $f->label = $def['label'];
+                if (isset($def['description'])) $f->description = $def['description'];
+                if (isset($def['columnWidth'])) $f->columnWidth = $def['columnWidth'];
+                if (isset($def['rows'])) $f->rows = $def['rows'];
+                if (isset($def['options']) && $type === 'InputfieldSelect') {
+                    $f->addOptions($def['options']);
+                }
+
+                // Load value: config first, then file fallback for txt fields
+                $val = $savedConfig[$name] ?? $def['value'];
+                if (empty($val) && isset($def['file'])) {
+                    $path = $root . $def['file'];
+                    if (is_file($path)) $val = file_get_contents($path);
+                }
+                $f->attr('value', $val);
+
+                if ($type === 'InputfieldCheckbox' && $val) {
+                    $f->attr('checked', 'checked');
+                }
+
+                $fs->add($f);
+            }
+
+            $form->add($fs);
+        }
+
+        $submit = $modules->get('InputfieldSubmit');
+        $submit->attr('name', 'submit_save');
+        $submit->attr('value', $this->_('Guardar'));
+        $form->add($submit);
+
+        return $form;
+    }
+
+    protected function getFieldDefinitions(): array {
+        return [
+            'ga' => [
+                'label' => __('Google Analytics'),
+                'children' => [
+                    'ga_enabled' => [
+                        'type' => 'checkbox',
+                        'label' => __('Enable Google Analytics'),
+                        'value' => '',
+                        'columnWidth' => 25,
+                    ],
+                    'ga_id' => [
+                        'type' => 'text',
+                        'label' => __('Measurement ID'),
+                        'description' => __('Example: G-XXXXXXXXXX'),
+                        'value' => '',
+                        'columnWidth' => 25,
+                    ],
+                    'ga_position' => [
+                        'type' => 'select',
+                        'label' => __('Position'),
+                        'options' => ['head' => 'Head', 'body' => 'Body'],
+                        'value' => 'head',
+                        'columnWidth' => 25,
+                    ],
+                    'ga_consent_category' => [
+                        'type' => 'select',
+                        'label' => __('PrivacyWire Category'),
+                        'options' => ['statistics' => __('Statistics'), 'marketing' => __('Marketing'), 'functional' => __('Functional'), 'external_media' => __('External Media')],
+                        'value' => 'statistics',
+                        'columnWidth' => 25,
+                    ],
+                ],
+            ],
+            'gads' => [
+                'label' => __('Google Ads'),
+                'children' => [
+                    'gads_enabled' => [
+                        'type' => 'checkbox',
+                        'label' => __('Enable Google Ads'),
+                        'value' => '',
+                        'columnWidth' => 25,
+                    ],
+                    'gads_id' => [
+                        'type' => 'text',
+                        'label' => __('Ads ID'),
+                        'description' => __('Example: AW-XXXXXXXXX'),
+                        'value' => '',
+                        'columnWidth' => 25,
+                    ],
+                    'gads_position' => [
+                        'type' => 'select',
+                        'label' => __('Position'),
+                        'options' => ['head' => 'Head', 'body' => 'Body'],
+                        'value' => 'head',
+                        'columnWidth' => 25,
+                    ],
+                    'gads_consent_category' => [
+                        'type' => 'select',
+                        'label' => __('PrivacyWire Category'),
+                        'options' => ['marketing' => __('Marketing'), 'statistics' => __('Statistics'), 'functional' => __('Functional'), 'external_media' => __('External Media')],
+                        'value' => 'marketing',
+                        'columnWidth' => 25,
+                    ],
+                ],
+            ],
+            'fbpixel' => [
+                'label' => __('Facebook Pixel'),
+                'children' => [
+                    'fbpixel_enabled' => [
+                        'type' => 'checkbox',
+                        'label' => __('Enable Facebook Pixel'),
+                        'value' => '',
+                        'columnWidth' => 25,
+                    ],
+                    'fbpixel_id' => [
+                        'type' => 'text',
+                        'label' => __('Pixel ID'),
+                        'description' => __('Example: 123456789012345'),
+                        'value' => '',
+                        'columnWidth' => 25,
+                    ],
+                    'fbpixel_position' => [
+                        'type' => 'select',
+                        'label' => __('Position'),
+                        'options' => ['head' => 'Head', 'body' => 'Body'],
+                        'value' => 'head',
+                        'columnWidth' => 25,
+                    ],
+                    'fbpixel_consent_category' => [
+                        'type' => 'select',
+                        'label' => __('PrivacyWire Category'),
+                        'options' => ['marketing' => __('Marketing'), 'statistics' => __('Statistics'), 'functional' => __('Functional'), 'external_media' => __('External Media')],
+                        'value' => 'marketing',
+                        'columnWidth' => 25,
+                    ],
+                ],
+            ],
+            'custom' => [
+                'label' => __('Custom Tracking Code'),
+                'children' => [
+                    'custom_head' => [
+                        'type' => 'textarea',
+                        'label' => __('Custom Code — Head'),
+                        'description' => __('Injected before </head>'),
+                        'value' => '',
+                        'rows' => 6,
+                        'columnWidth' => 50,
+                    ],
+                    'custom_body' => [
+                        'type' => 'textarea',
+                        'label' => __('Custom Code — Body'),
+                        'description' => __('Injected before </body>'),
+                        'value' => '',
+                        'rows' => 6,
+                        'columnWidth' => 50,
+                    ],
+                ],
+            ],
+            'privacywire' => [
+                'label' => __('PrivacyWire Integration'),
+                'children' => [
+                    'privacywire_enabled' => [
+                        'type' => 'checkbox',
+                        'label' => __('Enable PrivacyWire integration'),
+                        'description' => __('If enabled, tracking codes will use data-category attributes so they only load after user consent.'),
+                        'value' => '',
+                    ],
+                ],
+            ],
+            'txtfiles' => [
+                'label' => __('Robots.txt & LLMs.txt'),
+                'children' => [
+                    'robots_txt' => [
+                        'type' => 'textarea',
+                        'label' => 'robots.txt',
+                        'description' => __('Content for /robots.txt'),
+                        'value' => '',
+                        'rows' => 10,
+                        'columnWidth' => 50,
+                        'file' => 'robots.txt',
+                    ],
+                    'llms_txt' => [
+                        'type' => 'textarea',
+                        'label' => 'llms.txt',
+                        'description' => __('Content for /llms.txt'),
+                        'value' => '',
+                        'rows' => 10,
+                        'columnWidth' => 50,
+                        'file' => 'llms.txt',
+                    ],
+                ],
+            ],
+        ];
+    }
+}

@@ -1,0 +1,84 @@
+#content .WireTabs #_ProcessPageEditPrev,
+#content .WireTabs #_ProcessPageEditNext {
+  float: right
+}
+
+#content .WireTabs #_ProcessPageEditPrev,
+#content .WireTabs #_ProcessPageEditNext {
+  color: #146ac5;
+  font-weight: 700;
+}
+
+#content .WireTabs #_ProcessPageEditPrev:hover,
+#content .WireTabs #_ProcessPageEditNext:hover {
+  color: #fff;
+}
+
+
+/**
+ * RENO TWEAKS
+ * ===============================
+ */
+
+.AdminThemeReno #content .WireTabs #_ProcessPageEditPrev:hover,
+.AdminThemeReno #content .WireTabs #_ProcessPageEditNext:hover {
+  color: #E95372;
+}
+
+.AdminThemeReno .prev-next-links {
+  float: right;
+  padding: 0.75em 1.5em 0.75em 1.5em;
+}
+
+.AdminThemeReno .prev-next-links ul li {
+  display: inline-block;
+  padding-left: 15px;
+  font-size: 1em;
+}
+
+
+
+/**
+ * UIKIT TWEAKS
+ * ===============================
+ */
+
+.AdminThemeUikit ul#PageEditTabs li.nextLink,
+.AdminThemeUikit ul#PageEditTabs li.prevLink {
+  position: absolute;
+  right:0;
+}
+
+.AdminThemeUikit ul#PageEditTabs li.spaceRight {
+  right:80px;
+}
+
+.AdminThemeUikit #content .WireTabs #_ProcessPageEditPrev:hover,
+.AdminThemeUikit #content .WireTabs #_ProcessPageEditNext:hover {
+  color: #E91C60 !important;
+}
+
+.AdminThemeUikit .prev-next-links {
+  font-size: 0.875rem;
+}
+
+@media only screen and (max-width: 767px) {
+
+  .prev-next-links .uk-pagination-previous span,
+  .prev-next-links .uk-pagination-next span {
+    display: none;
+  }
+
+}
+
+.ui-tooltip-content {
+  padding: 5px 10px;
+}
+
+
+body.modal .prev-next-links,
+body.modal #_ProcessPageEditPrev,
+body.modal #_ProcessPageEditNext {
+    display: none;
+}
+

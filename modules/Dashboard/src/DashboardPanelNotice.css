@@ -1,0 +1,47 @@
+.DashboardPanelNotice {
+
+  .uk-card-header {
+    display: none;
+  }
+
+  .uk-card-body {
+    padding-top: 15px;
+    padding-bottom: 15px;
+    display: flex;
+
+    /* Actions */
+
+    div:last-child {
+      margin-left: auto;
+      padding-left: 2em;
+      a {
+        color: inherit;
+        text-decoration: underline;
+        padding-right: .5em;
+        white-space: nowrap;
+        &:last-child {
+          padding-right: 0;
+        }
+      }
+    }
+  }
+
+  /* Status types */
+
+  &.notice-status--notice {}
+
+  &.notice-status--success {
+    color: var(--dashboard-color-success);
+    background-color: var(--dashboard-color-success-bg);
+  }
+
+  &.notice-status--warning {
+    color: var(--dashboard-color-warning);
+    background-color: var(--dashboard-color-warning-bg);
+  }
+
+  &.notice-status--error {
+    color: var(--dashboard-color-error);
+    background-color: var(--dashboard-color-error-bg);
+  }
+}

@@ -1,0 +1,42 @@
+<?php namespace ProcessWire;
+
+class MediaListerHooks extends WireData implements Module {
+
+	protected $open;
+
+	/**
+	 * Ready
+	 */
+	public function ready() {
+		$this->addHookBefore('ProcessPageEdit::execute', $this, 'beforePageEdit');
+		$this->addHookAfter('ProcessPageEdit::execute', $this, 'afterPageEdit');
+	}
+
+	/**
+	 * Before ProcessPageEdit::execute
+	 *
+	 * @param HookEvent $event
+	 */
+	protected function beforePageEdit(HookEvent $event) {
+		if($this->wire()->config->ajax) return;
+		$open_ids = $this->wire()->sanitizer->intArray($this->wire()->input->get('pml_open'));
+		if(!$open_ids) return;
+		$session = $this->wire()->session;
+		$session->setFor('InputfieldRepeater', 'openIDs', $open_ids);
+		$session->setFor('InputfieldRepeaterMatrix', 'openIDs', $open_ids);
+		$this->open = true;
+	}
+
+	/**
+	 * After ProcessPageEdit::execute
+	 *
+	 * @param HookEvent $event
+	 */
+	protected function afterPageEdit(HookEvent $event) {
+		if(!$this->open) return;
+		$session = $this->wire()->session;
+		$session->setFor('InputfieldRepeater', 'openIDs', []);
+		$session->setFor('InputfieldRepeaterMatrix', 'openIDs', []);
+	}
+
+}

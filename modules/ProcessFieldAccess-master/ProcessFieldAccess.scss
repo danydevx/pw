@@ -1,0 +1,58 @@
+// Mixin: Percentage grey (inverse of B in HSB)
+@function grey($percent) {
+	@return mix(black, white, $percent * 1%);
+}
+
+// Info
+.pfa-information {
+	h3 { font-weight:bold; font-size:16px; margin-top:8px; margin-bottom:5px; }
+	ul { margin-top:0; }
+}
+
+// Filters
+.pfa-filter-wrap { position:relative;
+	.pfa-icon-clear { position:absolute; top:50%; margin-top:-8px; opacity:0.4; z-index:2; right:8px; display:none; cursor:pointer;
+		&:hover { opacity:0.8; }
+	}
+}
+
+// Table
+#pfa-table-container {
+	// Unset overflow so that sticky table header works
+	> .pw-table-responsive { overflow:unset; }
+}
+#ProcessFieldAccessTable { border-collapse:separate; margin-bottom:calc(100vh - 276px);
+	body.AdminThemeUikitDefault & { margin-bottom:calc(100vh - 387px); }
+	.pfa-field-col,
+	.pfa-template-col,
+	.pfa-access-col,
+	.pfa-show-col,
+	.pfa-api-col { width:0.1%; }
+	.pfa-field-overrides { width:50%; }
+	> thead, > tbody {
+		> tr {
+			> th, > td { background-color:white; }
+			> th { position:sticky; top:0; border-bottom:1px solid grey(30);
+				body.AdminThemeUikitDefault & { top:56px; }
+			}
+			> td { font-size:14px; line-height:1.2; vertical-align:middle; border-bottom:1px solid grey(10);
+				&:first-child { font-size:16px; }
+				.pw-table-responsive { margin:0; overflow:unset; padding:0; outline:none; }
+			}
+		}
+	}
+	i { font-size:16px; }
+	.pfa-columns-head { color:black; }
+	.pfa-role[data-role-id="37"] { cursor:help; }
+	.pfa-role-add { font-weight:bold; color:green; }
+	.pfa-role-delete { text-decoration:line-through; color:red; }
+	.pfa-overrides-table { border-collapse:separate;
+		th { padding-top:0;
+			body.AdminThemeUikitDefault & { padding-top:2px; }
+		}
+		td { border-top:1px solid grey(10); vertical-align:middle; }
+		.pfa-view-col, .pfa-edit-col { width:40%; }
+	}
+	.pfa-hidden-by-field,
+	.pfa-hidden-by-template { display:none; }
+}

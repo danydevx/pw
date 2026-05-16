@@ -1,0 +1,982 @@
+<?php namespace ProcessWire;
+
+class ProcessWebPManager extends Process {
+
+    protected $lastConvertError = '';
+
+    public static function getModuleInfo() {
+        return [
+            'title' => 'Process WebP Manager',
+            'version' => 1,
+            'summary' => 'Genera imagenes WebP para uploads y carpetas de theme.',
+            'singular' => true,
+            'autoload' => false,
+            'permission' => 'page-edit',
+            'icon' => 'image',
+            'page' => [
+                'name' => 'webp-manager',
+                'parent' => 'setup',
+                'title' => 'WebP Manager',
+            ],
+        ];
+    }
+
+    public function ___execute() {
+        $input = wire('input');
+        $sanitizer = wire('sanitizer');
+
+        $out = '';
+        $report = $this->loadLastReport();
+        $runtimePathsSessionKey = 'webp_manager_runtime_paths';
+
+        if($input->get->download_csv) {
+            $this->downloadCsv($report);
+            return '';
+        }
+
+        if($input->post->delete_selected_webp) {
+            $selectedRows = $input->post->selected_rows;
+            $selectedMap = $input->post->selected_webp_map;
+            if(!is_array($selectedRows)) $selectedRows = [];
+            if(!is_array($selectedMap)) $selectedMap = [];
+            $selected = [];
+            foreach($selectedRows as $rowKey) {
+                $rowKey = (string) $rowKey;
+                if(isset($selectedMap[$rowKey])) $selected[] = (string) $selectedMap[$rowKey];
+            }
+            $deleted = $this->deleteSelectedWebp($selected);
+            $out .= '<div class="uk-alert-primary" uk-alert><p>WebP eliminadas: ' . (int) $deleted['deleted'] . ' | Errores: ' . (int) $deleted['errors'] . '</p></div>';
+            $report = $this->loadLastReport();
+        }
+
+        if($input->post->remove_selected_from_report) {
+            $selectedRows = $input->post->selected_rows;
+            if(!is_array($selectedRows)) $selectedRows = [];
+            $removed = $this->removeSelectedRowsFromReport($selectedRows);
+            $out .= '<div class="uk-alert-primary" uk-alert><p>Registros eliminados: ' . (int) $removed . '</p></div>';
+            $report = $this->loadLastReport();
+        }
+
+        if($input->post->clear_error_rows) {
+            $removed = $this->clearErrorRowsFromReport();
+            $out .= '<div class="uk-alert-warning" uk-alert><p>Registros de error eliminados: ' . (int) $removed . '</p></div>';
+            $report = $this->loadLastReport();
+        }
+
+        if($input->post->delete_all_webp) {
+            $deleted = $this->deleteAllWebpFromConfiguredPaths();
+            $out .= '<div class="uk-alert-warning" uk-alert><p>Eliminacion masiva completada. WebP eliminadas: ' . (int) $deleted['deleted'] . ' | Errores: ' . (int) $deleted['errors'] . '</p></div>';
+            $report = $this->loadLastReport();
+        }
+
+        if($input->post->generate_webp) {
+            $dryRun = (bool) $input->post->dry_run;
+            $batchOverride = $sanitizer->int($input->post->batch_limit);
+            $runtimePathsRaw = trim((string) $input->post->runtime_paths);
+            $runtimePaths = $this->parsePathsFromText($runtimePathsRaw);
+            $runtimeOnly = (bool) $input->post->runtime_only;
+            $this->session->set($runtimePathsSessionKey, $runtimePathsRaw);
+
+            if($runtimeOnly && empty($runtimePaths)) {
+                $out .= '<div class="uk-alert-danger" uk-alert><p>Activaste "solo rutas adicionales" pero no ingresaste ninguna ruta.</p></div>';
+                $summary = null;
+            } else {
+                $summary = $this->generateWebp($dryRun, $batchOverride > 0 ? $batchOverride : null, $report['run_id'] + 1, $runtimePaths, $runtimeOnly);
+            }
+            if(is_array($summary)) {
+                $out .= $this->renderSummary($summary, $dryRun);
+                $report = $this->loadLastReport();
+            }
+        }
+
+        $form = $this->modules->get('InputfieldForm');
+
+        $info = $this->modules->get('InputfieldMarkup');
+        $info->value = '<p><strong>Scope:</strong> Usa solo rutas definidas en la configuracion del modulo.</p>';
+        $form->add($info);
+
+        $dry = $this->modules->get('InputfieldCheckbox');
+        $dry->name = 'dry_run';
+        $dry->label = 'Dry run (no escribir archivos)';
+        $dry->value = 1;
+        $form->add($dry);
+
+        $batch = $this->modules->get('InputfieldInteger');
+        $batch->name = 'batch_limit';
+        $batch->label = 'Batch limit (opcional)';
+        $batch->description = 'Deja vacio para usar la configuracion del modulo.';
+        $batch->attr('value', '');
+        $form->add($batch);
+
+        $runtimePaths = $this->modules->get('InputfieldTextarea');
+        $runtimePaths->name = 'runtime_paths';
+        $runtimePaths->label = 'Rutas adicionales para esta ejecucion';
+        $runtimePaths->description = 'Opcional. Una ruta por linea. Se suman a las rutas configuradas del modulo.';
+        $runtimePaths->notes = 'Ejemplo: /site-ase/assets/themes/asedisplay/tmp-images';
+        $runtimePaths->rows = 3;
+        $runtimePaths->attr('value', (string) $this->session->get($runtimePathsSessionKey));
+        $form->add($runtimePaths);
+
+        $runtimeOnly = $this->modules->get('InputfieldCheckbox');
+        $runtimeOnly->name = 'runtime_only';
+        $runtimeOnly->label = 'Usar solo rutas adicionales en esta ejecucion';
+        $runtimeOnly->description = 'Si se activa, ignora scan_paths configuradas del modulo para esta corrida.';
+        $runtimeOnly->value = 1;
+        $form->add($runtimeOnly);
+
+        $submit = $this->modules->get('InputfieldSubmit');
+        $submit->name = 'generate_webp';
+        $submit->value = 'Escanear y generar WebP';
+        $form->add($submit);
+
+        $statusFilter = $sanitizer->text((string) $input->get->status);
+        $validStatuses = ['generated', 'skipped', 'error', 'dry-run', 'pending'];
+        if(!in_array($statusFilter, $validStatuses, true)) $statusFilter = '';
+        $limit = $sanitizer->int($input->get->limit);
+        if($limit < 10) $limit = 100;
+        if($limit > 1000) $limit = 1000;
+        $currentPage = $sanitizer->int($input->get->p);
+        if($currentPage < 1) $currentPage = 1;
+        $sort = $sanitizer->text((string) $input->get->sort);
+        $validSort = ['status', 'source', 'size_before', 'size_after', 'saved_percent'];
+        if(!in_array($sort, $validSort, true)) $sort = 'source';
+        $dir = strtolower($sanitizer->text((string) $input->get->dir)) === 'desc' ? 'desc' : 'asc';
+
+        $out .= $this->renderLastRunTable($report, $statusFilter, $limit, $currentPage, $sort, $dir);
+
+        return $out . $form->render();
+    }
+
+    protected function generateWebp(bool $dryRun = false, ?int $batchOverride = null, int $runId = 1, array $runtimePaths = [], bool $runtimeOnly = false): array {
+        $config = $this->modules->getConfig($this);
+        $quality = (int) ($config['quality'] ?? 80);
+        $quality = max(1, min(100, $quality));
+        $mode = (string) ($config['mode'] ?? 'missing');
+        $batchLimit = $batchOverride ?: (int) ($config['batch_limit'] ?? 200);
+        if($batchLimit < 1) $batchLimit = 200;
+
+        $scan = $this->collectImageFilesWithDiagnostics($config, $runtimePaths, $runtimeOnly);
+        $files = $scan['files'];
+        $engine = $this->detectEngine();
+
+        $result = [
+            'engine' => $engine,
+            'scanned' => count($files),
+            'processed' => 0,
+            'generated' => 0,
+            'skipped' => 0,
+            'errors' => 0,
+            'stoppedByBatch' => false,
+            'messages' => [],
+            'items' => [],
+            'created_at' => date('c'),
+            'dry_run' => $dryRun,
+            'run_id' => $runId,
+            'runtime_only' => $runtimeOnly,
+            'scan_paths' => $scan['paths'],
+        ];
+
+        foreach($scan['messages'] as $scanMessage) {
+            $result['messages'][] = $scanMessage;
+        }
+
+        if($engine === 'none') {
+            $result['messages'][] = 'No hay soporte WebP disponible (Imagick ni GD).';
+            return $result;
+        }
+
+        if(empty($files)) {
+            $result['messages'][] = 'No hay rutas configuradas o no se encontraron imagenes en las rutas definidas.';
+            $this->saveLastReport($result);
+            return $result;
+        }
+
+        foreach($files as $sourcePath) {
+            if($result['processed'] >= $batchLimit) {
+                $result['stoppedByBatch'] = true;
+                break;
+            }
+
+            $result['processed']++;
+            $webpPath = $this->toWebpPath($sourcePath);
+
+            if($this->shouldSkip($sourcePath, $webpPath, $mode)) {
+                $result['skipped']++;
+                $result['items'][] = $this->createReportItem($sourcePath, $webpPath, 'skipped');
+                continue;
+            }
+
+            if($dryRun) {
+                $result['generated']++;
+                $result['items'][] = $this->createReportItem($sourcePath, $webpPath, 'dry-run');
+                continue;
+            }
+
+            $sizeBefore = @filesize($sourcePath) ?: 0;
+            $ok = $this->convertToWebp($sourcePath, $webpPath, $quality, $engine);
+            if($ok) {
+                $result['generated']++;
+                @wireChmod($webpPath);
+                $sizeAfter = @filesize($webpPath) ?: 0;
+                $result['items'][] = $this->createReportItem($sourcePath, $webpPath, 'generated', $sizeBefore, $sizeAfter);
+            } else {
+                $result['errors']++;
+                $errorText = $this->lastConvertError ? (' (' . $this->lastConvertError . ')') : '';
+                $result['messages'][] = 'Error convirtiendo: ' . $sourcePath . $errorText;
+                $result['items'][] = $this->createReportItem($sourcePath, $webpPath, 'error', $sizeBefore, 0);
+            }
+        }
+
+        $this->saveLastReport($result);
+
+        return $result;
+    }
+
+    protected function collectImageFilesWithDiagnostics(array $config, array $runtimePaths = [], bool $runtimeOnly = false): array {
+        $configuredPaths = $this->getConfiguredPaths($config);
+        $paths = $runtimeOnly ? $runtimePaths : array_merge($configuredPaths, $runtimePaths);
+        $paths = array_values(array_unique(array_filter($paths, 'strlen')));
+
+        $messages = [];
+        $messages[] = $runtimeOnly
+            ? 'Modo activo: solo rutas adicionales.'
+            : 'Modo activo: rutas configuradas + adicionales.';
+        if(!empty($paths)) {
+            $messages[] = 'Rutas efectivas: ' . implode(' | ', $paths);
+        }
+        $all = [];
+        foreach($paths as $path) {
+            $res = $this->scanPathForImagesDetailed($path);
+            $messages[] = $res['message'];
+            if(!empty($res['files'])) $all = array_merge($all, $res['files']);
+        }
+
+        $all = array_values(array_unique($all));
+        sort($all);
+
+        return [
+            'files' => $all,
+            'paths' => $paths,
+            'messages' => $messages,
+        ];
+    }
+
+    protected function renderSummary(array $summary, bool $dryRun): string {
+        $title = $dryRun ? 'Resultado (dry run)' : 'Resultado';
+        $html = '<h3>' . $title . '</h3>';
+        $html .= '<ul>';
+        $html .= '<li>Engine: ' . $summary['engine'] . '</li>';
+        $html .= '<li>Escaneadas: ' . $summary['scanned'] . '</li>';
+        $html .= '<li>Procesadas: ' . $summary['processed'] . '</li>';
+        $html .= '<li>Generadas: ' . $summary['generated'] . '</li>';
+        $html .= '<li>Omitidas: ' . $summary['skipped'] . '</li>';
+        $html .= '<li>Errores: ' . $summary['errors'] . '</li>';
+        $html .= '</ul>';
+        if($summary['stoppedByBatch']) {
+            $html .= '<p><em>Se alcanzo el limite por lote, vuelve a ejecutar para continuar.</em></p>';
+        }
+        if(!empty($summary['messages'])) {
+            $html .= '<ul>';
+            foreach($summary['messages'] as $message) {
+                $html .= '<li>' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</li>';
+            }
+            $html .= '</ul>';
+        }
+        return $html;
+    }
+
+    protected function collectImageFiles(array $config, array $runtimePaths = [], bool $runtimeOnly = false): array {
+        $paths = $runtimeOnly ? [] : $this->getConfiguredPaths($config);
+        if(!empty($runtimePaths)) $paths = array_merge($paths, $runtimePaths);
+        $paths = array_values(array_unique($paths));
+        if(empty($paths)) return [];
+
+        $all = [];
+        foreach($paths as $path) {
+            $all = array_merge($all, $this->scanPathForImages($path));
+        }
+
+        $all = array_values(array_unique($all));
+        sort($all);
+        return $all;
+    }
+
+    protected function getConfiguredPaths(array $config): array {
+        $raw = trim((string) ($config['scan_paths'] ?? ''));
+        if($raw === '') return [];
+        return $this->parsePathsFromText($raw);
+    }
+
+    protected function parsePathsFromText(string $raw): array {
+        $raw = trim($raw);
+        if($raw === '') return [];
+
+        $paths = [];
+        foreach(preg_split('/\r\n|\r|\n/', $raw) as $line) {
+            $line = trim((string) $line);
+            if($line === '') continue;
+            $paths[] = $this->normalizePath($line);
+        }
+
+        return array_values(array_unique($paths));
+    }
+
+    protected function normalizePath(string $path): string {
+        $path = trim($path);
+        $rootPath = rtrim((string) $this->config->paths->root, '/');
+        $rootUrl = rtrim((string) $this->config->urls->root, '/');
+
+        // Already absolute filesystem path
+        if(strpos($path, $rootPath) === 0) return $path;
+
+        // URL-style path from this site root, e.g. /site-ase/assets/images
+        if($rootUrl !== '' && strpos($path, $rootUrl . '/') === 0) {
+            $relative = substr($path, strlen($rootUrl) + 1);
+            return $rootPath . '/' . ltrim((string) $relative, '/');
+        }
+
+        // Path with leading site folder name, e.g. /site-ase/assets/images
+        $siteFolder = basename($rootPath);
+        if(strpos($path, '/' . $siteFolder . '/') === 0) {
+            $relative = substr($path, strlen($siteFolder) + 2);
+            return $rootPath . '/' . ltrim((string) $relative, '/');
+        }
+
+        // Absolute-from-root path, e.g. /assets/images
+        if(strpos($path, '/') === 0) {
+            return $rootPath . $path;
+        }
+
+        // Relative path
+        return $rootPath . '/' . ltrim($path, '/');
+    }
+
+    protected function scanPathForImages(string $path): array {
+        $root = realpath($this->config->paths->root);
+        $realPath = realpath($path);
+        if(!$root || !$realPath) return [];
+        if(strpos($realPath, $root) !== 0) return [];
+        if(!is_dir($realPath)) return [];
+
+        $out = [];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($realPath, \FilesystemIterator::SKIP_DOTS)
+        );
+
+        foreach($iterator as $fileInfo) {
+            if(!$fileInfo->isFile()) continue;
+            $ext = strtolower((string) $fileInfo->getExtension());
+            if(!in_array($ext, ['jpg', 'jpeg', 'png'], true)) continue;
+            $out[] = $fileInfo->getPathname();
+        }
+
+        return $out;
+    }
+
+    protected function scanPathForImagesDetailed(string $path): array {
+        $root = realpath($this->config->paths->root);
+        $realPath = realpath($path);
+        if(!$root) {
+            return ['files' => [], 'message' => 'Root invalido: ' . $this->config->paths->root];
+        }
+        if(!$realPath) {
+            return ['files' => [], 'message' => 'Ruta no existe: ' . $path];
+        }
+        if(strpos($realPath, $root) !== 0) {
+            return ['files' => [], 'message' => 'Ruta fuera del root permitida: ' . $realPath];
+        }
+        if(!is_dir($realPath)) {
+            return ['files' => [], 'message' => 'Ruta no es directorio: ' . $realPath];
+        }
+
+        $files = $this->scanPathForImages($realPath);
+        $writeReason = '';
+        $writable = $this->canWriteDirectory($realPath, $writeReason);
+        $writeText = $writable ? 'si' : ('no' . ($writeReason ? ' - ' . $writeReason : ''));
+        return ['files' => $files, 'message' => 'Escaneado: ' . $realPath . ' (imagenes: ' . count($files) . ', writable: ' . $writeText . ')'];
+    }
+
+    protected function toWebpPath(string $sourcePath): string {
+        return preg_replace('/\.(jpe?g|png)$/i', '.webp', $sourcePath) ?: ($sourcePath . '.webp');
+    }
+
+    protected function shouldSkip(string $sourcePath, string $webpPath, string $mode): bool {
+        if($mode === 'force') return false;
+        if(!is_file($webpPath)) return false;
+        return true;
+    }
+
+    protected function detectEngine(): string {
+        if(class_exists('Imagick')) return 'imagick';
+        if(function_exists('imagewebp') && function_exists('gd_info')) {
+            $info = gd_info();
+            if(!empty($info['WebP Support'])) return 'gd';
+        }
+        return 'none';
+    }
+
+    protected function convertToWebp(string $sourcePath, string $webpPath, int $quality, string $engine): bool {
+        if($engine === 'imagick') {
+            return $this->convertWithImagick($sourcePath, $webpPath, $quality);
+        }
+        if($engine === 'gd') {
+            return $this->convertWithGd($sourcePath, $webpPath, $quality);
+        }
+        return false;
+    }
+
+    protected function convertWithImagick(string $sourcePath, string $webpPath, int $quality): bool {
+        try {
+            $this->lastConvertError = '';
+            $img = new \Imagick($sourcePath);
+            if($img->getImageAlphaChannel()) {
+                $img->setImageBackgroundColor(new \ImagickPixel('transparent'));
+            }
+            $img->setImageFormat('webp');
+            $img->setImageCompressionQuality($quality);
+            $ok = $img->writeImage($webpPath);
+            $img->clear();
+            $img->destroy();
+            return (bool) $ok;
+        } catch(\Throwable $e) {
+            $this->lastConvertError = $e->getMessage();
+            return false;
+        }
+    }
+
+    protected function convertWithGd(string $sourcePath, string $webpPath, int $quality): bool {
+        $this->lastConvertError = '';
+
+        if(!function_exists('imagewebp')) {
+            $this->lastConvertError = 'GD no tiene imagewebp() habilitado';
+            return false;
+        }
+
+        if(function_exists('gd_info')) {
+            $gd = gd_info();
+            if(empty($gd['WebP Support'])) {
+                $this->lastConvertError = 'GD sin soporte WebP';
+                return false;
+            }
+        }
+
+        $targetDir = dirname($webpPath);
+        if(!is_dir($targetDir)) {
+            if(!@mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+                $this->lastConvertError = 'No se pudo crear directorio destino: ' . $targetDir;
+                return false;
+            }
+        }
+        $writableCheckError = '';
+        if(!$this->canWriteDirectory($targetDir, $writableCheckError)) {
+            $this->lastConvertError = 'Directorio sin permiso de escritura: ' . $targetDir . ($writableCheckError ? (' | ' . $writableCheckError) : '');
+            return false;
+        }
+
+        $ext = strtolower((string) pathinfo($sourcePath, PATHINFO_EXTENSION));
+        $img = null;
+        if($ext === 'jpg' || $ext === 'jpeg') {
+            $img = @imagecreatefromjpeg($sourcePath);
+        } elseif($ext === 'png') {
+            $img = @imagecreatefrompng($sourcePath);
+            if($img) {
+                imagepalettetotruecolor($img);
+                imagealphablending($img, true);
+                imagesavealpha($img, true);
+            }
+        }
+
+        if(!$img) {
+            $this->lastConvertError = 'No se pudo abrir imagen origen con GD';
+            return false;
+        }
+
+        $ok = @imagewebp($img, $webpPath, $quality);
+        imagedestroy($img);
+        if(!$ok) {
+            $phpError = error_get_last();
+            $extra = is_array($phpError) && isset($phpError['message']) ? (' | ' . $phpError['message']) : '';
+            $this->lastConvertError = 'imagewebp() devolvio false' . $extra;
+        }
+        return (bool) $ok;
+    }
+
+    protected function canWriteDirectory(string $dir, string &$reason = ''): bool {
+        $reason = '';
+        if(!is_dir($dir)) {
+            $reason = 'No es directorio';
+            return false;
+        }
+
+        if(is_writable($dir)) {
+            return true;
+        }
+
+        $tmpFile = @tempnam($dir, 'wpm_');
+        if($tmpFile === false) {
+            $reason = 'tempnam() fallo para el proceso PHP';
+            return false;
+        }
+
+        @unlink($tmpFile);
+        return true;
+    }
+
+    protected function createReportItem(string $sourcePath, string $webpPath, string $status, int $sizeBefore = 0, int $sizeAfter = 0): array {
+        return [
+            'source' => $sourcePath,
+            'webp' => $webpPath,
+            'status' => $status,
+            'size_before' => $sizeBefore,
+            'size_after' => $sizeAfter,
+            'saved_percent' => $this->calculateSavedPercent($sizeBefore, $sizeAfter),
+        ];
+    }
+
+    protected function calculateSavedPercent(int $sizeBefore, int $sizeAfter): float {
+        if($sizeBefore <= 0 || $sizeAfter <= 0) return 0.0;
+        $saved = 100 - (($sizeAfter / $sizeBefore) * 100);
+        return round($saved, 2);
+    }
+
+    protected function getReportPath(): string {
+        return $this->config->paths->cache . 'webp-manager/last-run.json';
+    }
+
+    protected function loadLastReport(): array {
+        $path = $this->getReportPath();
+        if(!is_file($path)) {
+            return ['run_id' => 0, 'items' => []];
+        }
+
+        $json = @file_get_contents($path);
+        if($json === false || $json === '') {
+            return ['run_id' => 0, 'items' => []];
+        }
+
+        $data = json_decode($json, true);
+        if(!is_array($data)) {
+            return ['run_id' => 0, 'items' => []];
+        }
+
+        if(!isset($data['items']) || !is_array($data['items'])) {
+            $data['items'] = [];
+        }
+        if(!isset($data['run_id'])) {
+            $data['run_id'] = 0;
+        }
+
+        return $data;
+    }
+
+    protected function saveLastReport(array $report): void {
+        $dir = dirname($this->getReportPath());
+        if(!is_dir($dir)) {
+            wireMkdir($dir, true);
+        }
+
+        $json = json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if($json === false) return;
+
+        @file_put_contents($this->getReportPath(), $json);
+        @wireChmod($this->getReportPath());
+    }
+
+    protected function renderLastRunTable(array $report, string $statusFilter, int $limit, int $currentPage, string $sort, string $dir): string {
+        $items = $report['items'] ?? [];
+
+        if($statusFilter === 'pending') {
+            $items = $this->buildPendingItems();
+        }
+
+        if($statusFilter !== '') {
+            $items = array_values(array_filter($items, function($item) use ($statusFilter) {
+                return ($item['status'] ?? '') === $statusFilter;
+            }));
+        }
+
+        $items = $this->sortItems($items, $sort, $dir);
+
+        $totalItems = count($items);
+        $totalPages = max(1, (int) ceil($totalItems / $limit));
+        if($currentPage > $totalPages) $currentPage = $totalPages;
+        $offset = ($currentPage - 1) * $limit;
+        $items = array_slice($items, $offset, $limit);
+        $host = htmlspecialchars((string) ($this->config->httpHost ?? ''), ENT_QUOTES, 'UTF-8');
+
+        $html = '<div class="uk-card uk-card-default uk-card-small uk-margin">';
+        $html .= '<div class="uk-card-header"><strong>Ultima ejecucion</strong></div>';
+        $html .= '<div class="uk-card-body">';
+        $html .= '<p class="uk-margin-small">Host: <strong>' . $host . '</strong></p>';
+        if(isset($report['created_at'])) {
+            $html .= '<p class="uk-margin-small">Fecha: ' . htmlspecialchars((string) $report['created_at'], ENT_QUOTES, 'UTF-8') . '</p>';
+        }
+        $html .= '</div>';
+        $html .= '</div>';
+
+        $html .= '<div class="uk-card uk-card-default uk-card-small uk-margin">';
+        $html .= '<div class="uk-card-header"><strong>Filtros y opciones</strong></div>';
+        $html .= '<div class="uk-card-body">';
+        $html .= '<div class="uk-margin-small">';
+        $html .= '<a class="uk-button uk-button-text" href="./">Todos</a> · ';
+        $html .= '<a class="uk-button uk-button-text" href="' . $this->buildUrl(['status' => 'generated', 'limit' => $limit]) . '">Generadas</a> · ';
+        $html .= '<a class="uk-button uk-button-text" href="' . $this->buildUrl(['status' => 'skipped', 'limit' => $limit]) . '">Omitidas</a> · ';
+        $html .= '<a class="uk-button uk-button-text" href="' . $this->buildUrl(['status' => 'error', 'limit' => $limit]) . '">Errores</a> · ';
+        $html .= '<a class="uk-button uk-button-text" href="' . $this->buildUrl(['status' => 'dry-run', 'limit' => $limit]) . '">Dry run</a> · ';
+        $html .= '<a class="uk-button uk-button-text" href="' . $this->buildUrl(['status' => 'pending', 'limit' => $limit]) . '">Pendientes</a> · ';
+        $html .= '<a class="uk-button uk-button-text" href="./?download_csv=1">Descargar CSV</a>';
+        $html .= '</div>';
+
+        $html .= '<form method="get" class="uk-grid-small uk-child-width-1-1 uk-child-width-1-4@s" uk-grid>'; 
+        $html .= '<div><label class="uk-form-label">Items por pagina</label><div class="uk-form-controls"><select class="uk-select" name="limit">';
+        foreach([50,100,250,500] as $opt) {
+            $sel = $limit === $opt ? ' selected' : '';
+            $html .= '<option value="' . $opt . '"' . $sel . '>' . $opt . '</option>';
+        }
+        $html .= '</select></div></div>';
+        $html .= '<div><label class="uk-form-label">Ordenar por</label><div class="uk-form-controls"><select class="uk-select" name="sort">';
+        $sortLabels = ['source' => 'Origen', 'status' => 'Estado', 'size_before' => 'Tam. original', 'size_after' => 'Tam. webp', 'saved_percent' => 'Ahorro'];
+        foreach($sortLabels as $key => $label) {
+            $sel = $sort === $key ? ' selected' : '';
+            $html .= '<option value="' . $key . '"' . $sel . '>' . $label . '</option>';
+        }
+        $html .= '</select></div></div>';
+        $html .= '<div><label class="uk-form-label">Direccion</label><div class="uk-form-controls"><select class="uk-select" name="dir">';
+        $html .= '<option value="asc"' . ($dir === 'asc' ? ' selected' : '') . '>Asc</option>';
+        $html .= '<option value="desc"' . ($dir === 'desc' ? ' selected' : '') . '>Desc</option>';
+        $html .= '</select></div></div>';
+        $html .= '<input type="hidden" name="status" value="' . htmlspecialchars($statusFilter, ENT_QUOTES, 'UTF-8') . '">';
+        $html .= '<div class="uk-flex uk-flex-bottom"><button class="uk-button uk-button-primary" type="submit">Aplicar</button></div>';
+        $html .= '</form>';
+        $html .= '</div>';
+        $html .= '</div>';
+
+        if($totalItems === 0) {
+            $html .= '<p>No hay elementos en el reporte.</p>';
+            return $html;
+        }
+
+        $html .= '<p>Mostrando ' . count($items) . ' de ' . $totalItems . ' elementos. Pagina ' . $currentPage . ' de ' . $totalPages . '.</p>';
+
+        $html .= '<div class="uk-card uk-card-default uk-card-small">';
+        $html .= '<div class="uk-card-header"><strong>Listado de imagenes</strong></div>';
+        $html .= '<div class="uk-card-body">';
+        $html .= '<form method="post" class="uk-form-stacked" id="webp-manager-list-form">';
+        $html .= '<input type="hidden" name="status" value="' . htmlspecialchars($statusFilter, ENT_QUOTES, 'UTF-8') . '">';
+        $html .= '<input type="hidden" name="limit" value="' . (int) $limit . '">';
+        $html .= '<input type="hidden" name="p" value="' . (int) $currentPage . '">';
+        $html .= '<div class="uk-margin-small">';
+        $html .= '<button type="submit" name="delete_selected_webp" value="1" class="uk-button uk-button-danger uk-button-small" onclick="return confirm(\'Eliminar WebP seleccionadas?\')">Eliminar seleccionadas</button> ';
+        $html .= '<button type="submit" name="remove_selected_from_report" value="1" class="uk-button uk-button-default uk-button-small" onclick="return confirm(\'Quitar seleccionadas del registro?\')">Quitar seleccionadas del registro</button> ';
+        $html .= '<button type="submit" name="clear_error_rows" value="1" class="uk-button uk-button-default uk-button-small" onclick="return confirm(\'Quitar todas las filas con error del registro?\')">Limpiar errores del registro</button> ';
+        $html .= '<button type="submit" name="delete_all_webp" value="1" class="uk-button uk-button-secondary uk-button-small" onclick="return confirm(\'Eliminar TODAS las WebP de rutas configuradas?\')">Eliminar todas las WebP</button>';
+        $html .= '</div>';
+
+        /** @var MarkupAdminDataTable $table */
+        $table = $this->modules->get('MarkupAdminDataTable');
+        $table->setEncodeEntities(false);
+        $table->headerRow([
+            '<input type="checkbox" class="uk-checkbox" id="webp-select-all" style="appearance:auto;-webkit-appearance:checkbox;" />',
+            'Thumb',
+            'Estado',
+            'Origen',
+            'WebP',
+            'Original',
+            'WebP',
+            'Ahorro',
+        ]);
+
+        foreach($items as $item) {
+            $status = htmlspecialchars((string) ($item['status'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $sourceRaw = (string) ($item['source'] ?? '');
+            $webpRaw = (string) ($item['webp'] ?? '');
+            $source = htmlspecialchars($sourceRaw, ENT_QUOTES, 'UTF-8');
+            $webp = htmlspecialchars($webpRaw, ENT_QUOTES, 'UTF-8');
+            $sizeBefore = $this->formatBytes((int) ($item['size_before'] ?? 0));
+            $sizeAfter = $this->formatBytes((int) ($item['size_after'] ?? 0));
+            $saved = (float) ($item['saved_percent'] ?? 0);
+            $canDelete = $statusFilter !== 'pending' && is_string($item['webp'] ?? null) && $this->isSafeWebpPath((string) $item['webp']) && is_file((string) $item['webp']);
+            $thumbUrl = $this->pathToUrl(is_file($webpRaw) ? $webpRaw : $sourceRaw);
+            $thumb = '-';
+            if($thumbUrl !== '') {
+                $thumbEsc = htmlspecialchars($thumbUrl, ENT_QUOTES, 'UTF-8');
+                $thumb = '<a href="' . $thumbEsc . '" target="_blank" rel="noopener"><img src="' . $thumbEsc . '" alt="thumb" style="width:56px;height:56px;object-fit:cover;border-radius:4px;border:1px solid #ddd;" /></a>';
+            }
+
+            $checkCell = '-';
+            $rowKey = base64_encode(($sourceRaw ?: '-') . '||' . ($webpRaw ?: '-'));
+            if($canDelete || $status === 'error' || $status === 'pending' || $status === 'skipped' || $status === 'dry-run') {
+                $checkCell = '<input class="webp-select uk-checkbox" style="appearance:auto;-webkit-appearance:checkbox;" type="checkbox" name="selected_rows[]" value="' . htmlspecialchars($rowKey, ENT_QUOTES, 'UTF-8') . '" />';
+                if($canDelete) {
+                    $checkCell .= '<input type="hidden" name="selected_webp_map[' . htmlspecialchars($rowKey, ENT_QUOTES, 'UTF-8') . ']" value="' . $webp . '" />';
+                }
+            }
+
+            $table->row([
+                $checkCell,
+                $thumb,
+                $status,
+                '<small>' . $source . '</small>',
+                '<small>' . $webp . '</small>',
+                $sizeBefore,
+                $sizeAfter,
+                number_format($saved, 2) . '%',
+            ]);
+        }
+
+        $html .= $table->render();
+
+        $html .= $this->renderPagerNav($currentPage, $totalPages, $statusFilter, $limit, $sort, $dir);
+        $html .= '</form>';
+        $html .= '</div>';
+        $html .= '</div>';
+        $html .= '<script>(function(){var all=document.getElementById("webp-select-all");if(!all) return;all.addEventListener("change",function(){document.querySelectorAll("#webp-manager-list-form .webp-select").forEach(function(cb){cb.checked=all.checked;});});})();</script>';
+        return $html;
+    }
+
+    protected function renderPagerNav(int $currentPage, int $totalPages, string $statusFilter, int $limit, string $sort, string $dir): string {
+        if($totalPages <= 1) return '';
+        $start = max(1, $currentPage - 4);
+        $end = min($totalPages, $currentPage + 4);
+
+        $html = '<ul class="uk-pagination uk-flex-center MarkupPagerNav">';
+        if($currentPage > 1) {
+            $html .= '<li class="MarkupPagerNavPrevious"><a href="' . $this->buildUrl(['status' => $statusFilter, 'limit' => $limit, 'sort' => $sort, 'dir' => $dir, 'p' => $currentPage - 1]) . '"><span>&laquo;</span></a></li>';
+        }
+        for($p = $start; $p <= $end; $p++) {
+            $cls = $p === $currentPage ? ' class="uk-active MarkupPagerNavOn"' : '';
+            $html .= '<li' . $cls . '><a href="' . $this->buildUrl(['status' => $statusFilter, 'limit' => $limit, 'sort' => $sort, 'dir' => $dir, 'p' => $p]) . '"><span>' . $p . '</span></a></li>';
+        }
+        if($currentPage < $totalPages) {
+            $html .= '<li class="MarkupPagerNavNext"><a href="' . $this->buildUrl(['status' => $statusFilter, 'limit' => $limit, 'sort' => $sort, 'dir' => $dir, 'p' => $currentPage + 1]) . '"><span>&raquo;</span></a></li>';
+        }
+        $html .= '</ul>';
+        return $html;
+    }
+
+    protected function buildPendingItems(): array {
+        $config = $this->modules->getConfig($this);
+        $sources = $this->collectImageFiles($config);
+        $items = [];
+        foreach($sources as $sourcePath) {
+            $webpPath = $this->toWebpPath($sourcePath);
+            if(is_file($webpPath)) continue;
+            $sizeBefore = @filesize($sourcePath) ?: 0;
+            $items[] = $this->createReportItem($sourcePath, $webpPath, 'pending', $sizeBefore, 0);
+        }
+        return $items;
+    }
+
+    protected function sortItems(array $items, string $sort, string $dir): array {
+        usort($items, function($a, $b) use ($sort, $dir) {
+            $va = $a[$sort] ?? '';
+            $vb = $b[$sort] ?? '';
+            if(in_array($sort, ['size_before', 'size_after', 'saved_percent'], true)) {
+                $va = (float) $va;
+                $vb = (float) $vb;
+                $cmp = $va <=> $vb;
+            } else {
+                $cmp = strcmp((string) $va, (string) $vb);
+            }
+            return $dir === 'desc' ? -$cmp : $cmp;
+        });
+        return $items;
+    }
+
+    protected function buildUrl(array $params = []): string {
+        $query = [];
+
+        foreach($_GET as $k => $v) {
+            if(!is_string($k)) continue;
+            if(in_array($k, ['status', 'limit', 'sort', 'dir', 'p', 'download_csv'], true)) continue;
+            if(is_array($v)) continue;
+            $query[$k] = (string) $v;
+        }
+
+        foreach($params as $k => $v) {
+            if($v === '' || $v === null) continue;
+            $query[$k] = (string) $v;
+        }
+        $qs = http_build_query($query);
+        return './' . ($qs ? '?' . $qs : '');
+    }
+
+    protected function pathToUrl(string $path): string {
+        if($path === '' || !is_file($path)) return '';
+        $root = rtrim((string) $this->config->paths->root, '/');
+        $real = realpath($path);
+        if(!$real) return '';
+        if(strpos($real, $root) !== 0) return '';
+        $rel = substr($real, strlen($root));
+        if($rel === false) return '';
+        return rtrim((string) $this->config->urls->root, '/') . str_replace(DIRECTORY_SEPARATOR, '/', $rel);
+    }
+
+    protected function formatBytes(int $bytes): string {
+        if($bytes <= 0) return '-';
+        $units = ['B', 'KB', 'MB', 'GB'];
+        $pow = (int) floor(log($bytes, 1024));
+        $pow = min($pow, count($units) - 1);
+        $value = $bytes / pow(1024, $pow);
+        return number_format($value, 2) . ' ' . $units[$pow];
+    }
+
+    protected function downloadCsv(array $report): void {
+        $items = $report['items'] ?? [];
+
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="webp-last-run.csv"');
+
+        $out = fopen('php://output', 'w');
+        if($out === false) return;
+
+        fputcsv($out, ['status', 'source', 'webp', 'size_before', 'size_after', 'saved_percent']);
+        foreach($items as $item) {
+            fputcsv($out, [
+                $item['status'] ?? '',
+                $item['source'] ?? '',
+                $item['webp'] ?? '',
+                $item['size_before'] ?? 0,
+                $item['size_after'] ?? 0,
+                $item['saved_percent'] ?? 0,
+            ]);
+        }
+        fclose($out);
+        exit;
+    }
+
+    protected function deleteSelectedWebp(array $selected): array {
+        $deleted = 0;
+        $errors = 0;
+
+        foreach($selected as $path) {
+            $path = (string) $path;
+            if(!$this->isSafeWebpPath($path)) {
+                $errors++;
+                continue;
+            }
+            if(!is_file($path)) {
+                $errors++;
+                continue;
+            }
+            if(@unlink($path)) {
+                $deleted++;
+            } else {
+                $errors++;
+            }
+        }
+
+        if($deleted > 0) {
+            $this->removeDeletedFromReport($selected);
+        }
+
+        return ['deleted' => $deleted, 'errors' => $errors];
+    }
+
+    protected function deleteAllWebpFromConfiguredPaths(): array {
+        $config = $this->modules->getConfig($this);
+        $paths = $this->getConfiguredPaths($config);
+        $files = $this->scanPathsForWebp($paths);
+
+        $deleted = 0;
+        $errors = 0;
+        foreach($files as $file) {
+            if(!$this->isSafeWebpPath($file)) {
+                $errors++;
+                continue;
+            }
+            if(@unlink($file)) {
+                $deleted++;
+            } else {
+                $errors++;
+            }
+        }
+
+        if($deleted > 0) {
+            $this->removeDeletedFromReport($files);
+        }
+
+        return ['deleted' => $deleted, 'errors' => $errors];
+    }
+
+    protected function isSafeWebpPath(string $path): bool {
+        if(strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) !== 'webp') return false;
+        $root = realpath($this->config->paths->root);
+        $real = realpath($path);
+        if(!$root || !$real) return false;
+        return strpos($real, $root) === 0;
+    }
+
+    protected function scanPathsForWebp(array $paths): array {
+        $all = [];
+        foreach($paths as $path) {
+            $realPath = realpath($path);
+            if(!$realPath || !is_dir($realPath)) continue;
+
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($realPath, \FilesystemIterator::SKIP_DOTS)
+            );
+
+            foreach($iterator as $fileInfo) {
+                if(!$fileInfo->isFile()) continue;
+                if(strtolower((string) $fileInfo->getExtension()) !== 'webp') continue;
+                $all[] = $fileInfo->getPathname();
+            }
+        }
+
+        $all = array_values(array_unique($all));
+        sort($all);
+        return $all;
+    }
+
+    protected function removeDeletedFromReport(array $paths): void {
+        $report = $this->loadLastReport();
+        if(empty($report['items']) || !is_array($report['items'])) return;
+
+        $removeMap = [];
+        foreach($paths as $p) {
+            $removeMap[(string) $p] = true;
+        }
+
+        $report['items'] = array_values(array_filter($report['items'], function($item) use ($removeMap) {
+            $webp = (string) ($item['webp'] ?? '');
+            return $webp === '' || !isset($removeMap[$webp]);
+        }));
+
+        $this->saveLastReport($report);
+    }
+
+    protected function removeSelectedRowsFromReport(array $selectedRows): int {
+        if(empty($selectedRows)) return 0;
+        $report = $this->loadLastReport();
+        if(empty($report['items']) || !is_array($report['items'])) return 0;
+
+        $selectedMap = [];
+        foreach($selectedRows as $rowKey) {
+            $selectedMap[(string) $rowKey] = true;
+        }
+
+        $before = count($report['items']);
+        $report['items'] = array_values(array_filter($report['items'], function($item) use ($selectedMap) {
+            $key = base64_encode(((string) ($item['source'] ?? '-') ?: '-') . '||' . ((string) ($item['webp'] ?? '-') ?: '-'));
+            return !isset($selectedMap[$key]);
+        }));
+
+        $removed = $before - count($report['items']);
+        if($removed > 0) $this->saveLastReport($report);
+        return $removed;
+    }
+
+    protected function clearErrorRowsFromReport(): int {
+        $report = $this->loadLastReport();
+        if(empty($report['items']) || !is_array($report['items'])) return 0;
+
+        $before = count($report['items']);
+        $report['items'] = array_values(array_filter($report['items'], function($item) {
+            return ((string) ($item['status'] ?? '')) !== 'error';
+        }));
+        $removed = $before - count($report['items']);
+        if($removed > 0) $this->saveLastReport($report);
+        return $removed;
+    }
+}

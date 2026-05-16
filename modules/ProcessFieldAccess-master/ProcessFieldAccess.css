@@ -1,0 +1,84 @@
+.pfa-information h3 {
+  font-weight: bold;
+  font-size: 16px;
+  margin-top: 8px;
+  margin-bottom: 5px; }
+.pfa-information ul {
+  margin-top: 0; }
+
+.pfa-filter-wrap {
+  position: relative; }
+  .pfa-filter-wrap .pfa-icon-clear {
+    position: absolute;
+    top: 50%;
+    margin-top: -8px;
+    opacity: 0.4;
+    z-index: 2;
+    right: 8px;
+    display: none;
+    cursor: pointer; }
+    .pfa-filter-wrap .pfa-icon-clear:hover {
+      opacity: 0.8; }
+
+#pfa-table-container > .pw-table-responsive {
+  overflow: unset; }
+
+#ProcessFieldAccessTable {
+  border-collapse: separate;
+  margin-bottom: calc(100vh - 276px); }
+  body.AdminThemeUikitDefault #ProcessFieldAccessTable {
+    margin-bottom: calc(100vh - 387px); }
+  #ProcessFieldAccessTable .pfa-field-col,
+  #ProcessFieldAccessTable .pfa-template-col,
+  #ProcessFieldAccessTable .pfa-access-col,
+  #ProcessFieldAccessTable .pfa-show-col,
+  #ProcessFieldAccessTable .pfa-api-col {
+    width: 0.1%; }
+  #ProcessFieldAccessTable .pfa-field-overrides {
+    width: 50%; }
+  #ProcessFieldAccessTable > thead > tr > th, #ProcessFieldAccessTable > thead > tr > td, #ProcessFieldAccessTable > tbody > tr > th, #ProcessFieldAccessTable > tbody > tr > td {
+    background-color: white; }
+  #ProcessFieldAccessTable > thead > tr > th, #ProcessFieldAccessTable > tbody > tr > th {
+    position: sticky;
+    top: 0;
+    border-bottom: 1px solid #b3b3b3; }
+    body.AdminThemeUikitDefault #ProcessFieldAccessTable > thead > tr > th, body.AdminThemeUikitDefault #ProcessFieldAccessTable > tbody > tr > th {
+      top: 56px; }
+  #ProcessFieldAccessTable > thead > tr > td, #ProcessFieldAccessTable > tbody > tr > td {
+    font-size: 14px;
+    line-height: 1.2;
+    vertical-align: middle;
+    border-bottom: 1px solid #e6e6e6; }
+    #ProcessFieldAccessTable > thead > tr > td:first-child, #ProcessFieldAccessTable > tbody > tr > td:first-child {
+      font-size: 16px; }
+    #ProcessFieldAccessTable > thead > tr > td .pw-table-responsive, #ProcessFieldAccessTable > tbody > tr > td .pw-table-responsive {
+      margin: 0;
+      overflow: unset;
+      padding: 0;
+      outline: none; }
+  #ProcessFieldAccessTable i {
+    font-size: 16px; }
+  #ProcessFieldAccessTable .pfa-columns-head {
+    color: black; }
+  #ProcessFieldAccessTable .pfa-role[data-role-id="37"] {
+    cursor: help; }
+  #ProcessFieldAccessTable .pfa-role-add {
+    font-weight: bold;
+    color: green; }
+  #ProcessFieldAccessTable .pfa-role-delete {
+    text-decoration: line-through;
+    color: red; }
+  #ProcessFieldAccessTable .pfa-overrides-table {
+    border-collapse: separate; }
+    #ProcessFieldAccessTable .pfa-overrides-table th {
+      padding-top: 0; }
+      body.AdminThemeUikitDefault #ProcessFieldAccessTable .pfa-overrides-table th {
+        padding-top: 2px; }
+    #ProcessFieldAccessTable .pfa-overrides-table td {
+      border-top: 1px solid #e6e6e6;
+      vertical-align: middle; }
+    #ProcessFieldAccessTable .pfa-overrides-table .pfa-view-col, #ProcessFieldAccessTable .pfa-overrides-table .pfa-edit-col {
+      width: 40%; }
+  #ProcessFieldAccessTable .pfa-hidden-by-field,
+  #ProcessFieldAccessTable .pfa-hidden-by-template {
+    display: none; }

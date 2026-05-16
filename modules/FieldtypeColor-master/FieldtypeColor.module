@@ -1,0 +1,345 @@
+<?php namespace ProcessWire;
+
+/**
+ * ProcessWire Color Fieldtype
+ * Field that stores an 32Bit unsigned integer value to hold RGB colors and Alpha channel
+ *
+ * @author Christoph Thelen aka @kixe 2017/07/03
+ * @copyright © 2017 Christoph Thelen
+ * @license Licensed under GNU/GPL v3
+ * @link https://processwire.com/talk/topic/...
+ * @version 1.2.2
+ * 
+ *
+ * @since 1.0.1 2017/07/05 - better validation, spectrum options modifiable
+ * @since 1.0.2 2017/07/09 - added default value option
+ * @since 1.0.3 2017/07/09 - added option for custom javascript
+ * @since 1.0.4 2017/08/18 - made # optional for input (pattern attribute)
+ * @since 1.0.5 2017/08/28 - optimized default color handling, added output format option array()
+ * @since 1.0.6 2017/10/07 - changed dec to hex conversion in function wakeupValue() from dechex() to base_convert() to be safe on 32bit systems
+ * @since 1.0.7 2017/10/08 - changed dec to hex conversion in function wakeupValue() from dechex() to custom function to be safe on 32bit systems
+ * @since 1.0.8 2018/09/08 - Installation error if PHP is running on 32-bit system and BCMath extension is not installed
+ * @since 1.0.9 2019/01/12 - fixed number format bug for rgba() and hsla() alpha channel if comma is forced as decimal separator by locale settings
+ * @since 1.1.0 2019/08/12 - better input check formatColorString()
+ * @since 1.1.1 2019/09/01 - fixed bug missing opacity if 0
+ * @since 1.1.2 2019/09/04 - fixed bug #5 FieldtypeColor index typo in var in function RGB2HSL() thanks to @junoforno
+ * @since 1.1.3 2019/10/10 - fixed bug #1 InputfieldColor - remove pattern attribute if spectrum color picker is used to prevent error in Chrome
+ * @since 1.1.4 2020/03/21 - fixed number format bug for hsl() output: use dot instead of comma as decimal separator independent from language setup
+ * @since 1.1.5 2020/05/15 switched to ProcessWire namespace
+ * @since 1.1.6 2021/10/04 added comparison functions getClosestColorName(), getColorDistance(), getLuminanceDistance()
+ * @since 1.1.7 2021/10/10 added output format option: array([0,255], [0,255], [0,255]) indexed array: R,G,B
+ * @since 1.1.8 2023/07/17 added output format option: array([0,255], [0,255], [0,255]) indexed array: H,S,L
+ * @since 1.1.9 2023/10/03 update sanitizeValue() formatColorString()
+ * @since 1.2.0 2024/03/27 fixed PHP 8.1 deprecation warning on strlen()
+ * @since 1.2.1 2024/06/08 fixed PHP 8.1 deprecation warning hexdec()
+ * @since 1.2.2 2024/07/16 made functions hookable: sleepValue(), wakeupValue()
+ * 
+ * 
+ * made for ProcessWire 3.x by Ryan Cramer
+ * https://processwire.com
+ * 
+ */
+
+class FieldtypeColor extends Fieldtype {
+
+	public static function getModuleInfo() {
+		return array(
+			'title' => 'Color',
+			'version' => 122,
+			'summary' => 'Field that stores a color value as 32bit integer reflecting a RGBA value. Many options for Input (HTML5 Inputfield Color, Textfield with changing background, various jQuery/JS ColorPickers, custom jQuery/JS/CSS) and Output (RGB, RGBA, HSL, HSLA, HEX, Array).',
+			'installs' => 'InputfieldColor',
+			'href' => 'https://processwire.com/talk/topic/16679-fieldtypecolor/',
+			'requires' => 'PHP>=7.2.0'
+		);
+	}
+
+	public function ___getCompatibleFieldtypes(Field $field) {
+        $fieldtypes = $this->wire(new Fieldtypes());
+        foreach($this->wire('fieldtypes') as $fieldtype) {
+            if(!$fieldtype instanceof FieldtypeInteger &&
+            	!$fieldtype instanceof FieldtypeColor &&
+            	$fieldtype != 'FieldtypeText') {
+                $fieldtypes->remove($fieldtype);
+            }
+        }
+        return $fieldtypes; 
+	}
+
+	public function getInputfield(Page $page, Field $field) {
+		$inputfield = $this->modules->get('InputfieldColor'); 
+		$inputfield->initValue = $this->sanitizeValue($page, $field, $field->defaultValue);
+		$inputfield->class = $this->className();
+		return $inputfield; 
+	}
+	
+	public function sanitizeValue(Page $page, Field $field, $value) {
+		return $this->_sanitizeValue($value);
+	}
+
+	protected function _sanitizeValue($value) {
+		if (!$value) return $value;
+		$value = ltrim($value, '#');
+		if (strlen($value) == 8) return $value;
+		else if (strlen($value) == 6) return 'ff'.$value; // add alpha channel
+		else throw New WireException('Expecting Hex color string (length 6 or 8 digits) with optional leading \'#\'');
+	}
+
+	public function ___sleepValue(Page $page, Field $field, $value) {
+		return hexdec($value ?? '');
+	}
+
+	public function ___wakeupValue(Page $page, Field $field, $value) {
+		if (!$value) return $value;
+		if (function_exists("bcmod")) return str_pad(self::bcdechex($value), 8, '0', STR_PAD_LEFT); // BCMath extension required
+		return str_pad(dechex($value), 8, '0', STR_PAD_LEFT); // 64-bit system required
+	}
+
+	/**
+	 * Converts a number from decimal to hex (BCMath extension required)
+	 * returns precice result even if number is bigger than PHP_INT_MAX (safe for 32bit systems)
+	 *
+	 * @param int/string/float number
+	 * @return string
+	 *
+	 * @see http://php.net/manual/en/ref.bc.php#99130
+	 */
+	public static function bcdechex($dec) {
+        $last = bcmod("$dec", 16);
+        $remain = bcdiv(bcsub("$dec", $last), 16);
+        if($remain == 0) return dechex($last);
+        else return self::bcdechex($remain).dechex($last);
+    }
+
+	/**
+	 * Converts a RGB color value to HSL. Conversion formula
+	 * @param array of 3 color values R, G, and B [0, 255]
+	 * @return array The HSL representation
+	 *
+	 * @see https://stackoverflow.com/questions/2353211/hsl-to-rgb-color-conversion/9493060#9493060
+	 * @see http://en.wikipedia.org/wiki/HSL_color_space
+	 */
+	public function RGB2HSL(array $rgb) {
+		$rgb = array_map(function($v) { return $v/ 255; }, $rgb);
+	    $max = max($rgb);
+	    $min = min($rgb);
+	    $hue = $sat = $light = ($max + $min) / 2;
+
+	    if($max == $min) {
+	        $hue = $sat = 0; // achromatic
+	    } else {
+	        $d = $max - $min;
+	        $sat = $light > 0.5 ? $d / (2 - $max - $min) : $d / ($max + $min);
+	        switch($max) {
+	            case $rgb[0]:
+		            $hue = ($rgb[1] - $rgb[2]) / $d + ($rgb[1] < $rgb[1] ? 6 : 0);
+		            break;
+	            case $rgb[1]:
+	            	$hue = ($rgb[2] - $rgb[0]) / $d + 2;
+	            	break;
+	            case $rgb[2]:
+	            	$hue = ($rgb[0] - $rgb[1]) / $d + 4;
+	            	break;
+	        }
+	        $hue = $hue / 6;
+	    }
+	    // round and convert float to string with dot as decimal separator in any language
+	    $hue = str_replace(',', '.', round($hue * 360));
+	    $sat = str_replace(',', '.', round($sat * 100, 1));
+	    $light = str_replace(',', '.', round($light * 100, 1));
+
+	    return [$hue, $sat, $light];
+	}
+
+	/**
+	 * Find the "naive" difference between two colors.
+	 * @see https://php.tutorialink.com/finding-nearest-match-rgb-color-from-array-of-colors/
+	 * @param int[] $color_a Three-element array with R,G,B color values 0-255.
+	 * @param int[] $color_b Three-element array with R,G,B color values 0-255.
+	 * @return int
+	 */
+	public function getColorDistance(array $color_a, array $color_b): int {
+	    return
+	        abs($color_a[0] - $color_b[0]) +
+	        abs($color_a[1] - $color_b[1]) +
+	        abs($color_a[2] - $color_b[2]);
+	}
+
+	/**
+	 * Find the difference between two colors' luminance values.
+	 * @see https://php.tutorialink.com/finding-nearest-match-rgb-color-from-array-of-colors/
+	 * @param int[] $color_a Three-element array with R,G,B color values 0-255.
+	 * @param int[] $color_b Three-element array with R,G,B color values 0-255.
+	 * @return int
+	 */
+	public function getLuminanceDistance(array $color_a, array $color_b): int {
+	    $luminance_f = function ($red, $green, $blue): int {
+	        // Source: https://en.wikipedia.org/wiki/Relative_luminance
+	        $luminance = (int) (0.2126 * $red + 0.7152 * $green + 0.0722 * $blue);
+	        return $luminance;
+	    };
+
+	    return abs(
+	        $luminance_f($color_a[0], $color_a[1], $color_a[2]) -
+	        $luminance_f($color_b[0], $color_b[1], $color_b[2])
+	    );
+	}
+
+	/**
+	 * Find the closest named color
+	 * @param hexcolor
+	 * @return string
+	 */
+	public function getClosestColorName(string $color) {
+		$color = ltrim($color, '#');
+		if (strlen($color) == 6) $color = "ff$color";
+		if (strlen($color) != 8) throw new WireException("Invalid parameter. Expected hex string of 6 or 8 digits length with or without leading '#'.");
+		$color = $this->formatColorString($color, 9);	
+		$palette = json_decode(file_get_contents(__DIR__ . '/colornames.json'), true);
+		$min = 765;
+		$match = null;
+		foreach ($palette as $name => $pcolor) {
+			$pcolor = $this->formatColorString("ff$pcolor", 9);
+			if ($pcolor === $color) return $name; // quick exit if full match
+		    $distance = $this->getColorDistance($pcolor, $color);
+		    if ($distance >= $min) continue;
+		    $min = $distance;
+		    $match = $name;
+		}
+		return $match;
+	}
+
+	/**
+	 * Format value for output
+	 *
+	 */
+	public function ___formatValue(Page $page, Field $field, $value) {
+		if (!$value) return null;
+		if ($field->outputFormat === 7) return $this->sleepValue($page, $field, $value);
+		return $this->formatColorString($value, $field->outputFormat);
+	}
+
+	/**
+	 * Format color string
+	 *
+	 * @param $value string - hex string of 8 chiffres, first 2 is the alpha channel
+	 * @param $of int - output format
+	 * @return string formatted color string
+	 * @throws object WireException - if input doesn't match (check for length, detailed check in debug mode)
+	 *
+	 */
+	public function formatColorString($value, $of = 0) {
+		$value = $this->_sanitizeValue($value);
+		// simple length check or preg_match in debug mode
+		if (strlen($value) != 8 || ($this->wire('config')->debug && !preg_match('/[A-Fa-f0-9]{8}/', $value))) {
+			throw new WireException("Invalid input: $value. Expected hex string of 8 digits length.");
+		}
+
+		if ($of === 6) return $value;
+		if ($of === 0) return "#".substr($value,2);
+		if ($of === 1) return "#".$value;
+
+		$hexVals = str_split($value, 2);
+		$value = array_map('hexdec', $hexVals);
+
+		// opacity
+		$opacity = '0';
+		if ($value[0] > 1 && in_array($of ,array(3,5,8,10,12))) {
+			$opacity = round($value[0] / 255, 2); // float
+			$opacity = rtrim(number_format($opacity, 2, '.', ''),'.0'); // convert float to string with dot as decimal separator
+		}
+ 
+ 		if ($of === 9) return [$value[1], $value[2], $value[3]];
+ 		if ($of === 10) return [$value[1], $value[2], $value[3], $opacity];
+
+		if ($of === 8) {
+			$assocArray = array(
+				'o' => $opacity,
+				'r' => $value[1],
+				'g' => $value[2],
+				'b' => $value[3],
+				'ox' => $hexVals[0],
+				'rx' => $hexVals[1],
+				'gx' => $hexVals[2],
+				'bx' => $hexVals[3],
+			);
+			return array_merge($value, $assocArray);
+		}
+
+		if ($of === 2) return "rgb($value[1], $value[2], $value[3])";
+		if ($of === 3) return "rgba($value[1], $value[2], $value[3], $opacity)";	
+
+		$hsl = $this->RGB2HSL(array_slice($value,1,3));
+
+		if ($of === 11) return $hsl;
+
+ 		if ($of === 12) {
+ 			$hsla = $hsl;
+			$hsla[] = $opacity;
+ 			return $hsla;
+ 		}
+
+		if ($of === 4) return "hsl($hsl[0], $hsl[1]%, $hsl[2]%)";
+		if ($of === 5) return "hsla($hsl[0], $hsl[1]%, $hsl[2]%, $opacity)";
+	}
+
+	public function getDatabaseSchema(Field $field) {
+		$schema = parent::getDatabaseSchema($field);
+		$schema['data'] = "int UNSIGNED NOT NULL";
+		return $schema;
+	}
+
+	public function ___getConfigInputfields(Field $field) {
+
+		$inputfields = $this->wire(new InputfieldWrapper());
+
+		$f = $this->wire('modules')->get('InputfieldRadios'); 
+		$f->attr('name', 'outputFormat');
+		$f->label = $this->_('Output Format');
+		$f->description = $this->_('Choose your preferred output format.');
+
+		$f->addOption(0, $this->_('string 6-digit hex color *#4496dd*'));
+		$f->addOption(1, $this->_('string 8-digit hex color *#fa4496dd* (limited browser support)'));
+		$f->addOption(2, $this->_('string *rgb(68, 100, 221)*'));
+		$f->addOption(3, $this->_('string *rgba(68, 100, 221, 0.98)*'));
+		$f->addOption(4, $this->_('string *hsl(227, 69.2%, 56.7%)*')); 
+		$f->addOption(5, $this->_('string *hsla(227, 69.2%, 56.7%, 0.98)*'));
+		$f->addOption(6, $this->_('string 8-digit raw hex *fa4496dd* (unformatted)'));
+		$f->addOption(7, $this->_('int 32bit (storage)'));
+		$f->addOption(8, $this->_('array(r[0,255], g[0,255], b[0,255], o[0,1], rx[00,ff], gx[00,ff], bx[00,ff], ox[00,ff])'));
+		$f->addOption(9, $this->_('array([0,255], [0,255], [0,255]) indexed array: R,G,B'));
+		$f->addOption(10, $this->_('array([0,255], [0,255], [0,255], [0,1]) indexed array: R,G,B,Alpha'));
+		$f->addOption(11, $this->_('array([0,360], [69.2%], [56.7%]) indexed array: H,S,L'));
+		$f->addOption(12, $this->_('array([0,360], [69.2%], [56.7%], [0,1]) indexed array: H,S,L,Alpha'));
+
+		$f->attr('value', (int) $field->outputFormat);
+		$inputfields->add($f); 
+
+		$f = $this->wire('modules')->get('InputfieldColor');
+		$f->attr('name', 'defaultValue');
+		$f->label = $this->_('Default value');
+
+		$f->inputType = $field->inputType;
+		$f->spectrum = $field->spectrum;
+		$f->initJS = $field->initJS;
+		$f->fileJS = $field->fileJS;
+		$f->fileCSS = $field->fileCSS;
+		$f->jqueryCore = $field->jqueryCore;
+		$f->jqueryUI = $field->jqueryUI;
+		$f->alpha = $field->alpha;
+
+		$f->description = $this->_('This value is assigned as the default for blank fields and on newly created pages.');
+		$f->collapsed = Inputfield::collapsedBlank;
+		$f->attr('value', strlen($field->defaultValue ?? '') ? $this->sanitizeValue($this->wire('page'), $field, $field->defaultValue) : null);
+
+		$inputfields->add($f); 
+		
+		return $inputfields; 
+	}
+
+	public function ___install() {
+		if (function_exists("bcmod") === false && PHP_INT_SIZE < 8) {
+			throw new WireException($this->_('The BCMath extension is required if your system can not handle 64-bit integer values.'));
+		}
+		parent::___install();
+	}
+}

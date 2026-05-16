@@ -1,0 +1,160 @@
+.fset_red > .InputfieldHeader,
+.fset_red > .InputfieldHeader:hover{
+	color: #bc283d;
+}
+
+#modalForm {
+	padding: 0;
+	overflow: hidden;
+}
+
+#modalForm .uk-input,
+#modalForm .uk-select {
+	width: 100%;
+}
+
+#pgsModal {
+	display: none;
+}
+
+#modalForm .uk-form-danger {
+	border-color: #dc3545;
+	box-shadow: 0 0 0 1px #dc3545 inset;
+}
+
+.trash {
+	margin-right: 10px;
+}
+
+#pgsSettingsTableWrap {
+	margin-top: 10px;
+}
+
+#pgsSettingsTable .pgs-drag {
+	cursor: move;
+	width: 30px;
+	color: #6b7280;
+}
+
+#pgsSettingsTable td,
+#pgsSettingsTable th {
+	vertical-align: middle;
+}
+
+#pgsSettingsTable .pgs-actions {
+	text-align: right;
+	white-space: nowrap;
+}
+
+#pgsSettingsTable .pgs-actions .uk-button {
+	margin-left: 6px;
+}
+
+#pgsSettingsTable .pgs-actions .pgs-default-chip {
+	margin-right: 6px;
+	vertical-align: middle;
+}
+
+#pgsSettingsTable tr.pgs-row-deleted {
+	opacity: 0.45;
+}
+
+#pgsSettingsTable tr.pgs-row-deleted td {
+	text-decoration: underline;
+}
+
+#pgsSettingsTable tr.pgs-row-deleted .pgs-actions .edit,
+#pgsSettingsTable tr.pgs-row-deleted .pgs-actions .options {
+	pointer-events: none;
+	opacity: 0.6;
+}
+
+#addNew {
+	display: inline-block;
+	margin-top: 10px;
+}
+
+#tips {
+	color: #e83561;
+	margin-top: 10px;
+}
+
+#modalForm .uk-form-label {
+	font-weight: 600;
+	color: #253858;
+}
+
+.pgs-mode-pill {
+	display: inline-block;
+	padding: 4px 10px;
+	margin-bottom: 10px;
+	border-radius: 999px;
+	background: #e9f3ff;
+	color: #1e5fa8;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.pgs-dirty-pill {
+	display: inline-block;
+	padding: 4px 10px;
+	margin-bottom: 10px;
+	margin-left: 8px;
+	border-radius: 999px;
+	background: #fff4e5;
+	color: #9a5b00;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.pgs-help {
+	display: block;
+	margin-top: 4px;
+	color: #6b7280;
+	font-size: 12px;
+}
+
+.pgs-image-only {
+	display: none;
+}
+
+.pgs-file-only {
+	display: none;
+}
+
+.pgs-page-only {
+	display: none;
+}
+
+.pgs-checkboxes-only {
+	display: none;
+}
+
+#pgsSaveField[disabled] {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+#options-hint {
+	margin: 0;
+}
+
+#pgsOptionsTable .opt-key,
+#pgsOptionsTable .opt-label {
+	width: 100%;
+}
+
+#pgsOptionsTable .pgs-opt-default {
+	text-align: center;
+	cursor: pointer;
+}
+
+#pgsOptionsTable .opt-default {
+	cursor: pointer;
+}
+
+#modalForm .uk-modal-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}

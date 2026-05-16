@@ -1,0 +1,564 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+			[
+				"max",
+				"max-height"
+			],
+			[
+				"font",
+				"font-size"
+			],
+			[
+				"eva",
+				"evaluation"
+			],
+			[
+				"evalu",
+				"evaluation"
+			],
+			[
+				"PRODU",
+				"PRODUCCION"
+			],
+			[
+				"produc",
+				"PRODUCCION"
+			],
+			[
+				"desc",
+				"description"
+			],
+			[
+				"a",
+				"academiainternacionalglobos.com"
+			],
+			[
+				"text",
+				"text-muted"
+			],
+			[
+				"User",
+				"UserGalleriesController"
+			],
+			[
+				"teach",
+				"teachers"
+			],
+			[
+				"border-",
+				"border-bottom"
+			],
+			[
+				"border",
+				"border-0"
+			],
+			[
+				"he",
+				"height"
+			],
+			[
+				"flex-",
+				"flex-fill"
+			],
+			[
+				"fill",
+				"flex-fill"
+			],
+			[
+				"just",
+				"justify-content-center"
+			],
+			[
+				"rounded",
+				"rounded-3"
+			],
+			[
+				"bac",
+				"background"
+			],
+			[
+				"route",
+				"route('dashboard.courses.evaluations.index"
+			],
+			[
+				"VideoCardRe",
+				"VideoCardResources.vue"
+			],
+			[
+				"academi",
+				"academiainternacionalglobos"
+			],
+			[
+				"lastV",
+				"lastVideoIdLesson"
+			],
+			[
+				"lastVideo",
+				"lastVideoIdLesson"
+			],
+			[
+				"selec",
+				"selected_course"
+			],
+			[
+				"FieldTe",
+				"FieldText"
+			],
+			[
+				"align",
+				"align-items-center"
+			],
+			[
+				"eval",
+				"evaluations"
+			],
+			[
+				"Image",
+				"ImageThumb"
+			],
+			[
+				"re",
+				"request"
+			],
+			[
+				"over",
+				"overflow"
+			],
+			[
+				"h",
+				"height"
+			],
+			[
+				"min-",
+				"min-width"
+			],
+			[
+				"text-",
+				"text-transform"
+			],
+			[
+				"delete",
+				"deleteVideo"
+			],
+			[
+				"payment_sta",
+				"payment_status_id"
+			],
+			[
+				"payment_re",
+				"payment_refund"
+			],
+			[
+				"payment_s",
+				"payment_stripe_id"
+			],
+			[
+				"payment_",
+				"payment_stripe_id"
+			],
+			[
+				"FieldS",
+				"FieldSwitch"
+			],
+			[
+				"curren",
+				"currency_id"
+			],
+			[
+				"curre",
+				"currency_id"
+			],
+			[
+				"FieldSele",
+				"FieldSelectApi"
+			],
+			[
+				"place",
+				"placehold.co"
+			],
+			[
+				"Da",
+				"Dashboard"
+			],
+			[
+				"studen",
+				"students"
+			],
+			[
+				"Cer",
+				"Certificates"
+			],
+			[
+				"align-items",
+				"align-items-center"
+			],
+			[
+				"Exposici",
+				"exposición"
+			],
+			[
+				"He",
+				"Heading1"
+			],
+			[
+				"background",
+				"background-color"
+			],
+			[
+				"bg-colo",
+				"bg-color-3"
+			],
+			[
+				"b",
+				"bg-color-3"
+			],
+			[
+				"back",
+				"background-image"
+			],
+			[
+				"font-",
+				"font-size"
+			],
+			[
+				"margin-",
+				"margin-top"
+			],
+			[
+				"tex",
+				"text-align"
+			],
+			[
+				"bg-color",
+				"bg-color-6"
+			],
+			[
+				"max-",
+				"max-width"
+			],
+			[
+				"displ",
+				"display-6"
+			]
+		]
+	},
+	"buffers":
+	[
+	],
+	"build_system": "",
+	"build_system_choices":
+	[
+	],
+	"build_varint": "",
+	"command_palette":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+			[
+				"pa",
+				"Package Control: Install Package"
+			],
+			[
+				"pacake",
+				"Package Control: Install Package"
+			],
+			[
+				"packa",
+				"Install Package Control"
+			]
+		],
+		"width": 0.0
+	},
+	"console":
+	{
+		"height": 0.0,
+		"history":
+		[
+		]
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"expanded_folders":
+	[
+		"/mnt/desarrollo/server/processwire/site-pw"
+	],
+	"file_history":
+	[
+		"/mnt/proyectos/ADMIN/pwd.htaccess",
+		"/mnt/desarrollo/server/processwire/site-processwire/config.php",
+		"/mnt/desarrollo/server/processwire/site-pw/config.php",
+		"/mnt/desarrollo/server/processwire/index.config.php",
+		"/mnt/desarrollo/server/processwire/site-ase/static/index.html",
+		"/mnt/desarrollo/server/processwire/site-ase/static/http404.html",
+		"/mnt/desarrollo/server/processwire/site-orpot/config.php",
+		"/mnt/desarrollo/server/processwire/site-ase/config.php",
+		"/mnt/desarrollo/server/processwire/index.php",
+		"/mnt/desarrollo/server/processwire/site-ase/modules/StaticWire/StaticWire.info.php",
+		"/mnt/desarrollo/server/processwire/site-ase/modules/StaticWire/HtmlExporter.php",
+		"/mnt/desarrollo/server/processwire/site-ase/modules/Minify/Minify.module",
+		"/mnt/desarrollo/server/processwire/site-ase/static/webforms/index.html",
+		"/media/daniel/pwd.htaccess",
+		"/tmp/fz3temp-2/send.php",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/views/pages/page-about.view.php",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/views/partials/header.view.php",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/home.php",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/layouts/_Layout.php",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/views/pages/page-front.view.php",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/views/partials/footer.view.php",
+		"/mnt/desarrollo/server/processwire/site-ase/modules/WhatsappButton/WhatsappButton.css",
+		"/mnt/desarrollo/server/processwire/site-ase/modules/WhatsappButton/WhatsappButton.module.php",
+		"/mnt/desarrollo/server/processwire/site-ase/modules/Whatsapp/WhatsappWidget.module.php",
+		"/mnt/desarrollo/server/processwire/site-ase/modules/TawkToChat/TawkToChat.module.php",
+		"/mnt/desarrollo/server/processwire/site-ase/modules/WhatsappButton/views/button.tpl.php",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/helpers/ProcessHelpers/ProcessHelpersText.php",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/views/pages/page-corte.view.php",
+		"/mnt/desarrollo/server/processwire/site-ase/init.php",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/helpers/ProcessHelpers/ProcessHelpers.php",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/helpers/ProcessHelpers/ProcessHelpersImages.php",
+		"/tmp/fz3temp-2/config.php",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/views/pages/page-proyectos.view.php",
+		"/mnt/desarrollo/server/processwire/site-ase/ready.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/config.php",
+		"/mnt/desarrollo/server/processwire/site-ase/assets/files/README.txt",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/views/pages/page-gallery.view.php",
+		"/mnt/desarrollo/server/processwire/static/index.html",
+		"/mnt/desarrollo/server/processwire/site-ase/modules/StaticWire/StaticWire.module.php",
+		"/mnt/desarrollo/server/processwire/site-ase/modules/StaticWire/cli.php",
+		"/mnt/desarrollo/server/processwire/site-ase/modules/StaticWire/README.md",
+		"/mnt/desarrollo/server/processwire/site-ase/assets/aiom/css_496806add1dbebfe68524d258e1aeb63.css",
+		"/mnt/desarrollo/server/processwire/site-ase/modules/WebformSubmissions/WebformBuilder/WebformBuilder.module",
+		"/tmp/fz3temp-2/TawkToChat.module.php",
+		"/mnt/desarrollo/server/processwire/site-ase/assets/aiom/css_2c08d653e1ee60d55cd0da551026ea56.css",
+		"/mnt/desarrollo/server/processwire/site-ase/assets/aiom/css_1223218cda34b5a81575b8888d8c5ea2.css",
+		"/mnt/desarrollo/server/processwire/site-ase/assets/aiom/css_d3f6c9f653db7ea8855e62eb1f0b3891.css",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/routes.frontend.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/theme/assets/css/styles.less",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/theme/partials/_scripts.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/modules/Dashboard/DashboardPanelInstance.class.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/AGENTS.md",
+		"/tmp/fz3temp-2/.htaccess",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/assets/css/style.css",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/assets/css/rtmicon-thin.css",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/assets/css/rtmicons.css",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/assets/css/rtmicon-regular.css",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/_init.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/theme/assets/css/blocks.less",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/theme/assets/css/ux.less",
+		"/mnt/desarrollo/server/processwire/site-ase/templates/assets/css/vendor/fontawesome/all.min.css",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/routes.site.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/theme/pages/page--aboutus.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/assets/logs/errors.txt",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/theme/pages/page--home.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/theme/pages/page--whitelabel.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/theme/pages/page--diseno-medida.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/theme/partials/_header.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/theme/assets/css/ui.less",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/theme/partials/_head.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/config.site.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/home.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/page-site.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/_footer.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/.htaccess",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/theme/partials/_footer.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/themes/comunicare/pages/page--servicios-escenografias.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/themes/comunicare/pages/page--industrias.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/themes/comunicare/template-parts/strap-hero.php",
+		"/media/daniel/SERVIDOR1/pwd.htaccess",
+		"/media/daniel/EXT_BACKUP/TEMPLATES/foody-130/foody-130/foody-v3/index.html",
+		"/mnt/desarrollo/sh/processwire.sh",
+		"/mnt/desarrollo/server/processwire/site-orpotnet/templates/_header.php",
+		"/mnt/desarrollo/server/processwire/site-orpotnet_/config.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/themes/comunicare/partials/_header.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/themes/comunicare/pages/page--stand-modulares.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/themes/comunicare/pages/page--stand-octanorm.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/themes/comunicare/pages/page--stand-portatiles.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/themes/comunicare/pages/page--fabricacion.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/themes/comunicare/pages/page--gallery.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/themes/comunicare/pages/page--metodologia.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/themes/comunicare/pages/page--stand-custom.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-config.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/themes/comunicare/header.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/plugins/whatsapp-for-wordpress/includes/nta-whatsapp-popup.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/plugins/image-regenerate-select-crop/image-regenerate-select-crop.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/themes/comunicare/AGENTS.md",
+		"/mnt/desarrollo/server/wordpress/comunicare/wp-content/themes/comunicare/pages/page--servicios-retail.php",
+		"/mnt/desarrollo/server/wordpress/comunicare/.htaccess",
+		"/mnt/desarrollo/cv/cvonline/ARCHITECTURE.md",
+		"/mnt/desarrollo/cv/cvonline/CONTRIBUTING.md",
+		"/mnt/desarrollo/cv/cvonline/astro.config.mjs",
+		"/mnt/desarrollo/cv/cvonline/src/pages/index.astro",
+		"/mnt/desarrollo/cv/cvonline/src/layouts/PortfolioLayout.astro",
+		"/mnt/desarrollo/sh/wordpress.sh",
+		"/mnt/desarrollo/cv/cvonline/opencode.md",
+		"/mnt/desarrollo/cv/cvonline/package.json",
+		"/mnt/desarrollo/cv/cvonline/package-lock.json",
+		"/mnt/desarrollo/cv/cvonline/README.md",
+		"/mnt/desarrollo/cv/cvonline/SPEC.md",
+		"/mnt/desarrollo/cv/cvonline/STYLE.md",
+		"/mnt/desarrollo/cv/cvonline/tsconfig.json",
+		"/mnt/desarrollo/cv/cvonline/.gitignore",
+		"/mnt/desarrollo/sh/create_host.sh",
+		"/mnt/desarrollo/test/test1/src/views/NosotrosView.vue",
+		"/home/daniel/Descargas/Backup-codes-info.txt",
+		"/mnt/desarrollo/test/test1/AGENTS.md",
+		"/media/daniel/SERVIDOR1/httpd/academia/resources/js/Components/Dashboard/Courses/CourseCardIndex.vue",
+		"/media/daniel/SERVIDOR1/httpd/academia/resources/js/Pages/Frontend/Dashboard/Index.vue",
+		"/media/daniel/SERVIDOR1/httpd/academia/resources/js/Pages/Frontend/Evaluations/All.vue",
+		"/media/daniel/SERVIDOR1/httpd/academia/resources/js/Pages/Admin/Evaluations/Users/All.vue",
+		"/mnt/desarrollo/server/wp/tractosoft/wp-content/themes/tractosoft/pages/page-novedades.php",
+		"/mnt/desarrollo/server/wp/tractosoft/wp-content/plugins/orpot-slider/orpot-slider.php",
+		"/mnt/desarrollo/server/wp/tractosoft/wp-content/plugins/orpot-slider/includes/ctp.php",
+		"/mnt/desarrollo/server/wp/tractosoft/wp-content/plugins/orpot-slider/includes/meta.php",
+		"/mnt/desarrollo/server/wp/tractosoft/wp-content/plugins/orpot-slider/includes/admin-page.php",
+		"/mnt/desarrollo/server/wp/tractosoft/wp-content/plugins/orpot-slider/assets/admin/admin.js",
+		"/mnt/desarrollo/server/wp/tractosoft/wp-content/plugins/orpot-slider/assets/admin/admin.css"
+	],
+	"find":
+	{
+		"height": 33.0
+	},
+	"find_in_files":
+	{
+		"height": 283.0,
+		"where_history":
+		[
+			"/mnt/desarrollo/server/processwire/site-ase/templates/views",
+			"/mnt/desarrollo/server/processwire/site-orpotnet/templates/theme",
+			"/mnt/desarrollo/server/wordpress/comunicare/wp-content/themes/comunicare"
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"apu",
+			"<h5 class=\"m-0 \">",
+			"<h5",
+			"<h5 class=\"m-0 \">",
+			"videoModal",
+			"videoModal\n",
+			"videoModal",
+			"scripts->unique() as $file) echo \"\\n\\t\"; ",
+			"btn-success",
+			"Nuesro Trabajo habla por nosotros."
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+			"Nuestro Trabajo habla por nosotros."
+		],
+		"reverse": false,
+		"scrollbar_highlights": true,
+		"show_context": true,
+		"use_buffer2": true,
+		"use_gitignore": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"sheets":
+			[
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 33.0
+	},
+	"input":
+	{
+		"height": 97.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.find_results":
+	{
+		"height": 0.0
+	},
+	"pinned_build_system": "Packages/lessc/lessc.sublime-build",
+	"project": "pw.sublime-project",
+	"replace":
+	{
+		"height": 62.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 500.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 380.0
+	},
+	"select_symbol":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"selected_group": 0,
+	"settings":
+	{
+	},
+	"show_minimap": true,
+	"show_open_files": true,
+	"show_tabs": true,
+	"side_bar_visible": true,
+	"side_bar_width": 317.0,
+	"status_bar_visible": true,
+	"template_settings":
+	{
+	}
+}

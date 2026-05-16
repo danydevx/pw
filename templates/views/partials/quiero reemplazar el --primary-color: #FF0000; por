@@ -1,0 +1,13 @@
+quiero reemplazar el --primary-color: #FF0000; por un degradado lineal con estos 3 colores  con ese porcentaje
+#FA4939 60%
+#BE3C5E 20%
+#4A3A92 20%
+
+
+El archivo es style.css esta en /mnt/desarrollo/server/processwire/site-ase/templates/assets/css
+
+
+
+folio 12052026111558   
+banamex
+9549
